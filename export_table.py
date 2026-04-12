@@ -116,10 +116,10 @@ def export_html(rows: list, map_filter: str = '', type_filter: str = ''):
     # ── map stats ──────────────────────────────────────────────────────────
     map_stats = {}
     for r in rows:
-        mn, mname, yr = parse_map_name(r['map_name'])
-        key = mn or mname or r['map_name']
+        key = r['map_name']
         if key not in map_stats:
-            map_stats[key] = {'name': mname, 'year': yr, 'count': 0}
+            _, _, yr = parse_map_name(r['map_name'])
+            map_stats[key] = {'year': yr, 'count': 0}
         map_stats[key]['count'] += 1
     sorted_keys = sorted(map_stats.keys())
     total_maps  = len(sorted_keys)
@@ -130,12 +130,12 @@ def export_html(rows: list, map_filter: str = '', type_filter: str = ''):
         map_number, map_name, year = parse_map_name(r['map_name'])
         conf = float(r['confidence'])
         conf_color = '#2d6a2d' if conf >= 0.85 else ('#b8860b' if conf >= 0.70 else '#8b0000')
-        mapkey    = (map_number or map_name or r['map_name']).replace('"', '').replace("'", '')
+        mapkey    = r['map_name'].replace('"', '').replace("'", '')
         safe_name = r['feature_name'].replace('"', '').replace("'", '').replace('<', '').replace('>', '')
         table_rows_html += (
             f'<tr data-mk="{mapkey}" data-ft="{r["feature_type"]}" data-fn="{safe_name.lower()}">'
             f'<td><strong>{r["feature_name"]}</strong></td>'
-            f'<td>{r["grid_reference"]}</td>'
+            f'<td>{r["grid_reference"] or "-"}</td>'
             f'<td>{map_number}</td>'
             f'<td>{map_name}</td>'
             f'<td>{year}</td>'
@@ -147,16 +147,16 @@ def export_html(rows: list, map_filter: str = '', type_filter: str = ''):
     # ── sidebar checkboxes ────────────────────────────────────────────────
     checkboxes_html = ''
     for k in sorted_keys:
-        s   = map_stats[k]
+        s      = map_stats[k]
         safe_k = k.replace('"', '').replace("'", '')
+        meta   = f'{s["year"]} · {s["count"]}' if s['year'] else f'· {s["count"]}'
         checkboxes_html += (
             f'<label class="map-label">'
             f'<input type="checkbox" class="map-cb" value="{safe_k}" checked onchange="onToggle()">'
             f'<span class="ml-text">'
-            f'<span class="ml-num">{k}</span>'
-            f'<span class="ml-name">{s["name"]}</span>'
+            f'<span class="ml-num" style="white-space:normal;word-break:break-word">{k}</span>'
             f'</span>'
-            f'<span class="ml-meta">{s["year"]} · {s["count"]}</span>'
+            f'<span class="ml-meta">{meta}</span>'
             f'</label>\n'
         )
 
@@ -172,12 +172,12 @@ def export_html(rows: list, map_filter: str = '', type_filter: str = ''):
 body {{ font-family:'Segoe UI',Arial,sans-serif; background:#f0f2f5; color:#222; height:100vh; display:flex; flex-direction:column; overflow:hidden; }}
 
 /* ── Header ── */
-.hdr {{ background:#1a2535; color:white; padding:12px 22px; flex-shrink:0; display:flex; align-items:center; gap:16px; }}
+.hdr {{ background:#0E7490; color:white; padding:12px 22px; flex-shrink:0; display:flex; align-items:center; gap:16px; }}
 .hdr-title {{ font-size:1.15em; font-weight:700; }}
-.hdr-sub   {{ font-size:0.78em; color:#8899bb; margin-top:2px; }}
+.hdr-sub   {{ font-size:0.78em; color:rgba(255,255,255,0.72); margin-top:2px; }}
 .hdr-stats {{ margin-left:auto; display:flex; gap:18px; }}
-.hdr-stat .n {{ font-size:1.2em; font-weight:bold; color:#7ec8e3; text-align:center; }}
-.hdr-stat .l {{ font-size:0.7em; color:#8899bb; text-align:center; }}
+.hdr-stat .n {{ font-size:1.2em; font-weight:bold; color:#ffffff; text-align:center; }}
+.hdr-stat .l {{ font-size:0.7em; color:rgba(255,255,255,0.65); text-align:center; }}
 
 /* ── Layout ── */
 .layout {{ display:flex; flex:1; overflow:hidden; }}
@@ -194,7 +194,7 @@ body {{ font-family:'Segoe UI',Arial,sans-serif; background:#f0f2f5; color:#222;
 .map-label:hover {{ background:#f0f4ff; border-color:#d0d8f0; }}
 .map-label input[type=checkbox] {{ width:14px; height:14px; accent-color:#2c3e50; flex-shrink:0; cursor:pointer; }}
 .ml-text  {{ flex:1; overflow:hidden; }}
-.ml-num   {{ font-weight:700; color:#2c3e50; display:block; font-size:0.95em; white-space:nowrap; }}
+.ml-num   {{ font-weight:400; color:#2c3e50; display:block; font-size:0.88em; white-space:normal; word-break:break-word; }}
 .ml-name  {{ color:#888; font-size:0.82em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }}
 .ml-meta  {{ font-size:0.72em; color:#bbb; flex-shrink:0; white-space:nowrap; }}
 .sb-cmp {{ padding:9px 10px; border-top:1px solid #eee; flex-shrink:0; }}
@@ -211,28 +211,30 @@ select.ft-sel {{ padding:6px 9px; border:1px solid #ccc; border-radius:4px; font
 .row-badge {{ background:#2c3e50; color:white; padding:3px 9px; border-radius:10px; font-size:0.76em; }}
 .clr-btn {{ padding:5px 11px; background:#95a5a6; color:white; border:none; border-radius:4px; font-size:0.76em; cursor:pointer; }}
 .clr-btn:hover {{ background:#7f8c8d; }}
+.dl-btn {{ padding:5px 11px; background:#27ae60; color:white; border:none; border-radius:4px; font-size:0.76em; cursor:pointer; font-weight:600; }}
+.dl-btn:hover {{ background:#219a52; }}
 .tbl-wrap {{ flex:1; overflow:auto; }}
 table {{ border-collapse:collapse; width:100%; background:white; }}
-th {{ background:#2c3e50; color:white; padding:9px 13px; text-align:left; font-size:0.8em; position:sticky; top:0; z-index:1; white-space:nowrap; }}
+th {{ background:#22D3EE; color:white; padding:9px 13px; text-align:left; font-size:0.8em; position:sticky; top:0; z-index:1; white-space:nowrap; }}
 td {{ padding:6px 13px; border-bottom:1px solid #f0f0f0; font-size:0.82em; }}
 tr:hover td {{ background:#f5f8ff; }}
 .badge {{ padding:2px 7px; border-radius:10px; font-size:0.75em; font-weight:bold; color:white; }}
-.badge-settlement {{ background:#2980b9; }}
-.badge-river       {{ background:#27ae60; }}
+.badge-settlement {{ background:#6a1b9a; }}
+.badge-river       {{ background:#1565c0; }}
 .badge-mountain    {{ background:#8e44ad; }}
 .badge-landmark    {{ background:#e67e22; }}
 .badge-forest      {{ background:#1a7a4a; }}
 .badge-road        {{ background:#7f8c8d; }}
-.badge-lake        {{ background:#16a085; }}
+.badge-lake        {{ background:#0288d1; }}
 .badge-noise       {{ background:#bdc3c7; color:#555; }}
 .no-rows {{ text-align:center; padding:40px; color:#bbb; }}
 
 /* ── Compare Panel ── */
 #cmpPanel {{ display:none; flex:1; flex-direction:column; overflow:hidden; }}
-.cp-hdr {{ padding:12px 20px; background:#1a2535; color:white; display:flex; align-items:center; gap:12px; flex-shrink:0; }}
+.cp-hdr {{ padding:12px 20px; background:#0E7490; color:white; display:flex; align-items:center; gap:12px; flex-shrink:0; }}
 .cp-hdr h2 {{ font-size:0.98em; font-weight:600; }}
 .cp-tag {{ font-size:0.77em; color:#8899bb; margin-top:2px; }}
-.back-btn {{ margin-left:auto; padding:5px 13px; background:white; color:#1a2535; border:none; border-radius:4px; font-size:0.8em; font-weight:700; cursor:pointer; }}
+.back-btn {{ margin-left:auto; padding:5px 13px; background:white; color:#0E7490; border:none; border-radius:4px; font-size:0.8em; font-weight:700; cursor:pointer; }}
 .back-btn:hover {{ background:#e8ecf0; }}
 .cp-summary {{ display:flex; gap:1px; flex-shrink:0; background:#dde; }}
 .cp-stat {{ flex:1; background:white; padding:10px 14px; text-align:center; }}
@@ -262,8 +264,8 @@ tr:hover td {{ background:#f5f8ff; }}
 <!-- Header -->
 <div class="hdr">
   <div>
-    <div class="hdr-title">{title}</div>
-    <div class="hdr-sub">Survey of India — historical map feature database</div>
+    <div class="hdr-title">CV-Toposheet / Maps</div>
+    <div class="hdr-sub">Extracted Map Feature</div>
   </div>
   <div class="hdr-stats">
     <div class="hdr-stat"><div class="n">{len(rows):,}</div><div class="l">Features</div></div>
@@ -308,6 +310,7 @@ tr:hover td {{ background:#f5f8ff; }}
       </select>
       <span class="row-badge" id="rowCnt">{len(rows):,} rows</span>
       <button class="clr-btn" onclick="clearFilters()">Clear</button>
+      <button class="dl-btn" onclick="downloadCSV()">&#11015; Download Excel</button>
     </div>
     <div class="tbl-wrap">
       <table>
@@ -385,6 +388,20 @@ function clearFilters() {{
   applyFilters();
 }}
 
+function downloadCSV() {{
+  var vis = allRows.filter(function(r) {{ return r.style.display !== 'none'; }});
+  var lines = ['\uFEFF"Extracted Text","Grid Number","Map Number","Map Name","Year","Feature Type","Confidence"'];
+  vis.forEach(function(row) {{
+    var c = row.querySelectorAll('td');
+    var cols = Array.from(c).map(function(td) {{ return '"' + td.textContent.trim().replace(/"/g, '""') + '"'; }});
+    lines.push(cols.join(','));
+  }});
+  var blob = new Blob([lines.join('\\n')], {{type:'text/csv;charset=utf-8;'}});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href = url; a.download = 'toposheet_features.csv'; a.click();
+  URL.revokeObjectURL(url);
+}}
+
 /* ── Compare ──────────────────────────────────────────────────────── */
 function esc(s) {{
   return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -427,12 +444,15 @@ function runCompare() {{
   document.getElementById('cpSummary').innerHTML = sumHTML;
 
   /* ── tabs ── */
-  var tabsHTML = '<div class="cp-tab active" onclick="showTab(this,\'sec-common\')">&#10003; Common (' + common.size + ')</div>';
+  var tabsHTML = '<div class="cp-tab active" data-sec="sec-common">&#10003; Common (' + common.size + ')</div>';
   maps.forEach(function(mk) {{
     var sid = 'sec-u-' + mk.replace(/[^a-z0-9]/gi, '-');
-    tabsHTML += '<div class="cp-tab" onclick="showTab(this,\'' + sid + '\')">Only: ' + esc(mk) + ' (' + unique[mk].size + ')</div>';
+    tabsHTML += '<div class="cp-tab" data-sec="' + sid + '">Only: ' + esc(mk) + ' (' + unique[mk].size + ')</div>';
   }});
   document.getElementById('cpTabs').innerHTML = tabsHTML;
+  document.getElementById('cpTabs').querySelectorAll('.cp-tab').forEach(function(tab) {{
+    tab.addEventListener('click', function() {{ showTab(this, this.dataset.sec); }});
+  }});
 
   /* ── sections ── */
   var bodyHTML = '';
