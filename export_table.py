@@ -28,10 +28,24 @@ OUT_HTML  = config.RESULTS_FOLDER / 'table_export.html'
 # ─────────────────────────────────────────────────────────────────────────────
 def parse_map_name(raw: str):
     """
-    Parse a raw map_name like '63 P]14 Palamau (1918) Preliminary (1)'
+    Parse a raw map_name in two formats:
+      - '63 P]14 Palamau (1918) Preliminary (1)'
+      - '63-P-14-Palamau-1918-Preliminary-1'  (filename format)
     Returns: (map_number, map_name, year)
     e.g.    ('63 P/14', 'Palamau', '1918')
     """
+    # ── Filename format: 63-P-14-Palamau-1918-Preliminary-1 ──
+    fn_match = re.match(r'^(\d+)-([A-Z]+)-(\d+)-(.+?)-(\d{4})-', raw.strip())
+    if fn_match:
+        num    = fn_match.group(1)
+        letter = fn_match.group(2)
+        sub    = fn_match.group(3)
+        name   = fn_match.group(4)
+        year   = fn_match.group(5)
+        map_number = f"{num} {letter}/{sub}"
+        return map_number, name, year
+
+    # ── Standard format: 63 P]14 Palamau (1918) Preliminary (1) ──
     # Extract year: last 4-digit number in parentheses
     year_match = re.search(r'\((\d{4})\)', raw)
     year = year_match.group(1) if year_match else ''
@@ -44,15 +58,6 @@ def parse_map_name(raw: str):
         map_number = ''
 
     # Extract clean map name: text between the number and the year
-    clean = raw
-    if num_match:
-        clean = clean[num_match.end():].strip()
-    # Remove year and anything in parens after it
-    clean = re.sub(r'\s*\(\d{4}\).*$', '', clean).strip()
-    # Remove trailing "Preliminary" variants
-    clean = re.sub(r'\s*(Preliminary|District)\s*$', '', clean).strip()
-    # If "District" was stripped, re-add it for proper place names
-    # Actually keep "District" — it's part of the name
     clean = raw
     if num_match:
         clean = clean[num_match.end():].strip()
@@ -147,9 +152,10 @@ def export_html(rows: list, map_filter: str = '', type_filter: str = ''):
     # ── sidebar checkboxes ────────────────────────────────────────────────
     checkboxes_html = ''
     for k in sorted_keys:
-        s      = map_stats[k]
-        safe_k = k.replace('"', '').replace("'", '')
-        meta   = f'{s["year"]} · {s["count"]}' if s['year'] else f'· {s["count"]}'
+        s        = map_stats[k]
+        safe_k   = k.replace('"', '').replace("'", '')
+        _, _, yr = parse_map_name(k)
+        meta = f'{yr} · {s["count"]}' if yr else f'· {s["count"]}'
         checkboxes_html += (
             f'<label class="map-label">'
             f'<input type="checkbox" class="map-cb" value="{safe_k}" checked onchange="onToggle()">'
