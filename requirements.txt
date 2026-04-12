@@ -1,0 +1,26 @@
+# CV-Toposheet dependencies
+# Install with: pip install -r requirements.txt
+
+# Environment / config
+python-dotenv>=1.0.0
+
+# Image processing + tiling
+opencv-python>=4.9.0
+Pillow>=10.0.0
+numpy>=1.24.0
+
+# OCR (primary)
+easyocr>=1.7.0
+
+# LLM APIs
+openai>=1.30.0
+google-generativeai>=0.7.0
+
+# Database
+# sqlite3 is built-in to Python — no install needed
+
+# Data handling + export
+pandas>=2.0.0
+
+# Progress bars
+tqdm>=4.66.0

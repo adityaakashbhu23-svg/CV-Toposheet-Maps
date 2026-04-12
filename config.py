@@ -1,0 +1,75 @@
+# config.py  –  Central configuration loader for CV-Toposheet pipeline
+# Reads all settings from .env so no secrets are ever hardcoded.
+
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env from project root
+load_dotenv(Path(__file__).parent / '.env')
+
+# ── API Keys ──────────────────────────────────────────────────
+OPENAI_API_KEY  = os.getenv('OPENAI_API_KEY', '')
+GEMINI_API_KEY  = os.getenv('GEMINI_API_KEY', '')
+GEMINI_API_KEY_2 = os.getenv('GEMINI_API_KEY_2', '')
+CLAUDE_API_KEY  = os.getenv('CLAUDE_API_KEY', '')
+GROQ_API_KEY    = os.getenv('GROQ_API_KEY',   '')
+GROK_API_KEY    = os.getenv('GROK_API_KEY',   '')  # xAI Grok (Elon Musk)
+GROK_MODEL      = os.getenv('GROK_MODEL',     'grok-3-mini')
+
+# Which LLM to use: "vertex", "groq", "openai", "gemini", "claude", or "local"
+LLM_PROVIDER    = os.getenv('LLM_PROVIDER', 'vertex').lower()
+
+# Model names
+OPENAI_MODEL    = os.getenv('OPENAI_MODEL',  'gpt-4o-mini')
+GEMINI_MODEL    = os.getenv('GEMINI_MODEL',  'gemini-2.5-flash')
+CLAUDE_MODEL    = os.getenv('CLAUDE_MODEL',  'claude-3-5-haiku-20241022')
+GROQ_MODEL      = os.getenv('GROQ_MODEL',    'llama-3.1-8b-instant')
+
+# Vertex AI (Google Cloud — uses service_account2.json, billed to GCP credit)
+VERTEX_PROJECT  = os.getenv('VERTEX_PROJECT',  'cv-toposheet')
+VERTEX_LOCATION = os.getenv('VERTEX_LOCATION', 'us-central1')
+VERTEX_MODEL    = os.getenv('VERTEX_MODEL',    'gemini-2.5-flash')
+
+# ── Google Cloud Vision ──────────────────────────────────────
+_gcv_creds_rel  = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', 'service_account.json')
+# Resolve relative paths against the project root and set the env-var that
+# the Google Cloud client library reads automatically.
+_gcv_creds_path = Path(__file__).parent / _gcv_creds_rel
+if _gcv_creds_path.exists():
+    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(_gcv_creds_path)
+
+# ── OCR / Tiling ──────────────────────────────────────────────
+OCR_ENGINE      = os.getenv('OCR_ENGINE', 'gcv').lower()   # gcv | easyocr | tesseract
+OCR_CONFIDENCE  = float(os.getenv('OCR_CONFIDENCE_THRESHOLD', '0.3'))
+TILE_SIZE       = int(os.getenv('TILE_SIZE',   '1024'))
+TILE_OVERLAP    = int(os.getenv('TILE_OVERLAP', '50'))
+
+# ── Paths ─────────────────────────────────────────────────────
+BASE_DIR        = Path(__file__).parent
+MAPS_FOLDER     = BASE_DIR / os.getenv('MAPS_FOLDER',    'maps')
+RESULTS_FOLDER  = BASE_DIR / os.getenv('RESULTS_FOLDER', 'results')
+LOGS_FOLDER     = BASE_DIR / os.getenv('LOGS_FOLDER',    'logs')
+
+# Create output dirs on import
+RESULTS_FOLDER.mkdir(exist_ok=True)
+LOGS_FOLDER.mkdir(exist_ok=True)
+
+# ── Validation ────────────────────────────────────────────────
+def validate():
+    """Call this once at startup to confirm required keys are present."""
+    errors = []
+    if LLM_PROVIDER == 'openai' and not OPENAI_API_KEY:
+        errors.append('OPENAI_API_KEY is missing in .env')
+    if LLM_PROVIDER == 'gemini' and not GEMINI_API_KEY:
+        errors.append('GEMINI_API_KEY is missing in .env')
+    if not MAPS_FOLDER.exists():
+        errors.append(f'Maps folder not found: {MAPS_FOLDER}')
+    if errors:
+        for e in errors:
+            print(f'[CONFIG ERROR] {e}')
+        raise SystemExit('Fix config errors before running the pipeline.')
+    print(f'[CONFIG OK] LLM={LLM_PROVIDER.upper()}  Maps={MAPS_FOLDER}')
+
+if __name__ == '__main__':
+    validate()

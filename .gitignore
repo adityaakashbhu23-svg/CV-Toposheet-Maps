@@ -1,0 +1,31 @@
+# Git ignore - NEVER commit secrets or large files
+.env
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Output files (can be regenerated)
+results/
+logs/
+_temp_tile_*.jpg
+
+# Large map images (don't commit to git)
+maps/*.jpg
+maps/*.jpeg
+maps/*.png
+maps/*.tif
+maps/*.tiff
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
