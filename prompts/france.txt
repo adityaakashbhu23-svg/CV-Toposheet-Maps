@@ -1,0 +1,33 @@
+COUNTRY: France — Carte de France / IGN Topographic Maps
+ERA: 1870s–present
+SERIES: Série Bleue 1:25,000, TOP25, TOP50; historical État Major 1:80,000
+LANGUAGE: French; regional names in Breton (Brittany), Alsatian/German (Alsace), Basque, Occitan, Corsican
+
+GEOGRAPHIC SUFFIXES — use to classify feature_type:
+  RIVER:      Rivière, Ruisseau (stream), Torrent (mountain stream), Canal, Rigole (irrigation channel), Gave (Pyrenean river, e.g. Gave de Pau), Adour-type names
+  LAKE:       Lac, Étang (pond/lagoon), Mare (small pond), Marais (marsh), Tourbière (bog), Retenue (reservoir), Plan d'eau
+  MOUNTAIN:   Mont/Montagne, Pic (peak), Aiguille (needle peak, Alps), Crête (ridge), Col (pass), Puy (volcanic peak, Auvergne), Rocher/Roc/Roche (rock), Ballon (rounded Vosges summit)
+  VALLEY:     Vallée, Vallon (small valley), Ravin/Ravine, Gorge, Couloir (Alpine gully), Cluse
+  SETTLEMENT: -ville, -bourg, -court, -mesnil, -val, -mont, -sur- (on the), -en- (in the), -lès- (near), Hameau (hamlet), Ferme (farm), Lieu-dit (named place)
+  FOREST:     Forêt, Bois (wood), Taillis (coppice), Bosquet (grove), Lande (heath/moorland)
+  LANDMARK:   Chapelle (chapel), Abbaye, Château, Moulin (mill), Auberge (inn), Gîte, Refuge (Alpine hut), Pylône (pylon), Réservoir, Pont (bridge), Gué (ford)
+  ROAD:       Autoroute (A), Route Nationale (N), Départementale (D-number), Chemin (track), Sentier (footpath), GR (Grande Randonnée hiking path)
+
+COORDINATE SYSTEM:
+  Lambert Conformal Conic (Lambert I, II, III, IV for France; Lambert 93 modern)
+  Grid labels appear as "X = 850", "Y = 2100" (Lambert zone coords in km) — these are NOISE
+  Historical maps use Paris meridian (2°20'14"E of Greenwich)
+
+OCR ERRORS COMMON ON FRENCH TOPO:
+  accent loss: é→e, è→e, ê→e, ç→c, à→a, ô→o — correct: "Etang" → "Étang", "foret" → "forêt"
+  ligature: œ often reads as oe — "Boeuf" → "Bœuf"
+  hyphenation in lieu-dit names: "La Croix Rouge" may be hyphenated or not
+  apostrophe in "L'Étang", "D'Arcy" — often lost in OCR
+
+NOISE SPECIFIC TO FRENCH TOPO:
+  "Institut Géographique National" (IGN)
+  "Échelle 1:25 000", "Équidistance des courbes ... m"
+  "Système de référence: RGF93 / Lambert-93"
+  "© IGN - Paris [year]"
+  Département and commune boundary labels
+  Altitude spot heights formatted as "▲ 1234" or "● 567"

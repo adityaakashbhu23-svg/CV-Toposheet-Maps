@@ -74,7 +74,7 @@ def fetch_rows(map_filter: str = '', type_filter: str = '') -> list:
     cur = conn.cursor()
 
     query = """
-        SELECT feature_name, grid_reference, map_name, feature_type, confidence
+        SELECT feature_name, original_text, grid_reference, map_name, feature_type, confidence
         FROM features
         WHERE 1=1
     """
@@ -97,10 +97,12 @@ def fetch_rows(map_filter: str = '', type_filter: str = '') -> list:
 def export_csv(rows: list):
     with open(OUT_CSV, 'w', newline='', encoding='utf-8-sig') as f:  # utf-8-sig for Excel
         writer = csv.writer(f)
-        writer.writerow(['Extracted Text', 'Grid Number', 'Map Number', 'Map Name', 'Year', 'Feature Type', 'Confidence'])
+        writer.writerow(['As Written on Map', 'Normalised Name', 'Grid Number', 'Map Number', 'Map Name', 'Year', 'Feature Type', 'Confidence'])
         for r in rows:
             map_number, map_name, year = parse_map_name(r['map_name'])
+            original = r.get('original_text') or r['feature_name']
             writer.writerow([
+                original,
                 r['feature_name'],
                 r['grid_reference'],
                 map_number,

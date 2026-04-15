@@ -1,0 +1,30 @@
+COUNTRY: Pakistan — Survey of Pakistan (SOP) Topographical Maps
+ERA: 1950s–present; pre-1947 sheets are Survey of India heritage
+SERIES: 1:50,000 (Series U502), 1:250,000, 1:25,000 (border areas)
+LANGUAGES: Urdu, Punjabi, Sindhi, Pashto, Balochi, English — all romanised by SOP
+
+GEOGRAPHIC SUFFIXES — use to classify feature_type (largely same as SOI India):
+  RIVER:      Nai/Nala/Nadi, Rood/Rud (Persian: river), Darya (major river — Indus, Chenab etc.), Nullah, Khor/Khawr (seasonal watercourse), Band (embankment/dam), Hamal (Balochi ravine stream)
+  LAKE:       Jheel, Hamal (when lake context), Mangrove (coastal), Reservoir, Saline Lake, Chotiari
+  MOUNTAIN:   Koh (mountain, Persian/Pashto), Sar/Zom (summit in N areas), Ghar (Pashto hill), Pahar, Dhund (pass in Balochistan), Tangi (gorge)
+  PASS:       Darra (Pashto pass: Khyber Darra), Kotal (pass), Naka, Bolan (pass name)
+  SETTLEMENT: Abad, Pur, Kot/Qila (fort-town), Dera (camp/settlement), Mandi (market town), Chak (canal colony village: "Chak 12/ML"), Thesil/Tehsil (admin), Mohalla
+  FOREST:     Jungle, RF (Reserved Forest), Rakha (Punjabi: enclosed pasture), Bela (riverine forest/floodplain in Sindh/Punjab)
+  LANDMARK:   Dargah, Mosque/Masjid, Imambargah, Fort/Qila, Sarai, Chowki (police post), Rest House, Dak Bungalow, BM (Bench Mark), B.M., T.S. (Triangulation Station)
+  ROAD:       NL (National Highway), ML (Main Road), Cart Track, Kacha (unpaved), Pucca (paved)
+
+CHAK NUMBERING SYSTEM (canal colonies):
+  "Chak 12", "12ML", "12RB", "12/ML" — these are settlement names, classify as SETTLEMENT
+  Letters: ML=Montgomery Link, RB=Right Bank, LB=Left Bank, etc.
+
+OCR ERRORS COMMON ON SOP MAPS:
+  Same as SOI India (rn→m, broken spaces, 8→B, 6→G)
+  Urdu/Persian words: kh/gh/zh — common misread of digraphs
+  Long vowel markers missing: "Sarhad" may appear as "Sarhad" or "Sarhed"
+
+NOISE SPECIFIC TO SOP:
+  "Survey of Pakistan, Rawalpindi"
+  "R.F. 1:50,000" or "1:250,000"
+  "International Boundary" / "Line of Control" / "Working Boundary" — geopolitically sensitive, include but flag as BOUNDARY type
+  "Open Sheet", "Restricted", "Confidential"
+  Mils grid (military angular measurement labels) on some sheets

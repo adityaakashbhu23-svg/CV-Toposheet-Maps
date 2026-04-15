@@ -1,0 +1,32 @@
+COUNTRY: United Kingdom — Ordnance Survey (OS) Topographical Maps
+ERA: 1800s–1970s
+SERIES: One-Inch (1:63,360), 1:25,000, 1:50,000 Landranger, 1:250,000
+LANGUAGES: English, Welsh (bilingual in Wales), Scottish Gaelic (in Scotland)
+
+GEOGRAPHIC SUFFIXES — use to classify feature_type:
+  RIVER:      Beck (NE England), Burn (Scotland), Brook, Bourne, Gill (Lake District ravine stream), Sike, Strath (Scottish valley with river)
+  LAKE:       Loch (Scotland), Llyn (Wales), Mere, Tarn, Pool, Reservoir
+  MOUNTAIN:   Fell (Lake District / Pennines), Ben (Scotland, e.g. Ben Nevis), Tor (Dartmoor / Exmoor), Mynydd (Wales), Cnoc (Scotland), Pike, Crag
+  SETTLEMENT: -wich/-wick (market town), -ton/-tun (farmstead), -ford (river crossing), -bridge, -ham, -by (Viking), -thorpe (outlying farm), -burgh/-bury (fortified place), -chester/-caster (Roman fort)
+  FOREST:     Forest, Wood, Copse, Spinney, Plantation, Covert
+  LANDMARK:   Castle, Abbey, Priory, Church, Chapel, Tower, B.M. (Bench Mark), Trig Point, Station, Inn, Hall, Farm, Grange, Lodge
+  ROAD:       Motorway, A Road, B Road, Track, Footpath, Bridleway, Drove
+
+GRID SYSTEM — National Grid (NG) references:
+  Two-letter prefix (100km square): TQ, SP, SJ, NS, NT, etc.
+  Followed by 4–10 digit easting/northing: "TQ 3481", "SP 452 023"
+  These are LANDMARK type values — do NOT filter as noise
+
+OCR ERRORS COMMON ON OS MAPS:
+  rn → m       (same as SOI)
+  Cl → d        ("Clore" → "dlore" — reverse: correct d→Cl)
+  I/l confusion  ("llill" → "Hill", "Hl → Hill")
+  apostrophe loss ("St Johns" → "St. John's")
+  hyphen loss    ("Stoke on Trent" → "Stoke-on-Trent")
+
+NOISE SPECIFIC TO OS:
+  "Crown Copyright", "© Ordnance Survey"
+  "National Grid", "Transverse Mercator Projection"
+  Scale bars in miles and kilometres
+  Parish boundaries, County boundaries (dashed line labels)
+  "Contours at ... metre/feet vertical intervals"

@@ -1,0 +1,35 @@
+COUNTRY: Germany — Topographische Karte / Messtischblatt
+ERA: 1870s–1980s
+SERIES: TK25 (1:25,000), TK50 (1:50,000), TK100, TK200; historical Messtischblatt 1:25,000
+LANGUAGE: German; historical maps may have Gothic (Fraktur) script OCR challenges
+
+GEOGRAPHIC SUFFIXES — use to classify feature_type:
+  RIVER:      Bach (small stream), Graben (ditch/canal), Ache/Ach (Alpine stream), Fluss (river), Kanal, Rinn/Rinne (channel)
+  LAKE:       See (lake), Weiher (pond), Teich (artificial pond), Moor (bog/peat), Sumpf (swamp), Stausee (reservoir)
+  MOUNTAIN:   Berg (mountain/hill), Gipfel (summit), Spitze (peak), Kopf (rounded hill), Kuppe, Höhe (elevation), Horn (sharp peak), Schneeberg, Brocken-type names
+  VALLEY:     Tal (valley), Aue/Au (floodplain/meadow), Grund (wooded valley), Klamm (gorge), Schlucht (ravine)
+  SETTLEMENT: -stadt (city), -dorf (village), -burg (castle town), -hausen (homesteads), -heim (homestead/estate), -bach (stream), -berg (hill), -kirche (church village), -reuth/-ried/-rieth (clearing), -furt (ford), Hof (farm estate)
+  FOREST:     Wald, Forst, Holz, Gehölz, Heide (heath), Busch
+  LANDMARK:   Vermessungspunkt (survey point), Trigonometrischer Punkt (triangulation, abbrev. Trig.P or □), Kirche (church), Schloss (castle/palace), Kloster (monastery), Ruine, Berg-Gasthof (mountain inn), Hütte (hut/shelter), Brücke (bridge)
+  ROAD:       Bundesstraße (B followed by number), Kreisstraße (K-number), Gemeindestraße, Forstweg (forest track), Fußweg (footpath)
+
+COORDINATE SYSTEM:
+  Gauß-Krüger (GK) coordinate system used on historical German maps
+  Rechtswert (R/easting), Hochwert (H/northing)
+  UTMREF on modern maps
+  Sheet numbers like "TK25 5421" are NOISE
+
+OCR ERRORS COMMON ON GERMAN TOPO:
+  Fraktur script confusion: B→R, K→R, p→p, ß→fs or B
+  Umlauts: ä/ö/ü often read as a/o/u — correct back: "Munchen" → "München"
+  ue/oe/ae = umlaut expansions: "mueller" → "Müller"
+  ß (Eszett) often OCR'd as "ss" or "B" — "Strabe" → "Straße"
+  spacing in compound words: "Schwarz wald" → "Schwarzwald"
+
+NOISE SPECIFIC TO GERMAN TOPO:
+  "Herausgegeben vom Landesvermessungsamt..."
+  "Maßstab 1:25000"
+  "Höhenlinien im Abstand von ... m"
+  "© Landesvermessungsamt Baden-Württemberg" (or other state offices)
+  Kilometer grid labels: "34", "57" (standalone numbers near grid lines)
+  Sheet edge notes about neighboring sheets

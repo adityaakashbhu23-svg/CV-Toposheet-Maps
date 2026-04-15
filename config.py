@@ -20,6 +20,12 @@ GROK_MODEL      = os.getenv('GROK_MODEL',     'grok-3-mini')
 # Which LLM to use: "vertex", "groq", "openai", "gemini", "claude", or "local"
 LLM_PROVIDER    = os.getenv('LLM_PROVIDER', 'vertex').lower()
 
+# Ensemble mode: run ALL configured LLMs in parallel and vote on results.
+# Set ENSEMBLE_MODE=true in .env, or pass --ensemble flag to 4_llm_cleaning.py.
+ENSEMBLE_MODE   = os.getenv('ENSEMBLE_MODE', 'false').lower() in ('1', 'true', 'yes')
+# Max parallel LLM workers in ensemble (keep ≤ 6 to avoid CPU/memory pressure)
+LLM_ENSEMBLE_WORKERS = int(os.getenv('LLM_ENSEMBLE_WORKERS', '6'))
+
 # Model names
 OPENAI_MODEL    = os.getenv('OPENAI_MODEL',  'gpt-4o-mini')
 GEMINI_MODEL    = os.getenv('GEMINI_MODEL',  'gemini-2.5-flash')
@@ -42,8 +48,21 @@ if _gcv_creds_path.exists():
 # ── OCR / Tiling ──────────────────────────────────────────────
 OCR_ENGINE      = os.getenv('OCR_ENGINE', 'gcv').lower()   # gcv | easyocr | tesseract
 OCR_CONFIDENCE  = float(os.getenv('OCR_CONFIDENCE_THRESHOLD', '0.3'))
+OCR_WORKERS     = int(os.getenv('OCR_WORKERS', '4'))        # parallel tile workers
 TILE_SIZE       = int(os.getenv('TILE_SIZE',   '1024'))
 TILE_OVERLAP    = int(os.getenv('TILE_OVERLAP', '50'))
+
+# ── Country / Map Origin ─────────────────────────────────────
+# Controls which country-specific knowledge block is injected into the LLM prompt.
+# Supported: india, uk, usa, germany, france, pakistan
+# Set MAP_COUNTRY=usa in .env when processing USGS topo maps, etc.
+MAP_COUNTRY     = os.getenv('MAP_COUNTRY', 'india').lower()
+
+# ── Grid Detection ────────────────────────────────────────────
+# Survey of India standard sheet = 4 cols x 4 rows.
+# Override in .env if your maps use a different grid size.
+GRID_DEFAULT_COLS = int(os.getenv('GRID_DEFAULT_COLS', '4'))
+GRID_DEFAULT_ROWS = int(os.getenv('GRID_DEFAULT_ROWS', '4'))
 
 # ── Paths ─────────────────────────────────────────────────────
 BASE_DIR        = Path(__file__).parent

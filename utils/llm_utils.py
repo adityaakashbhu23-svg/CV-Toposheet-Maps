@@ -3,36 +3,126 @@
 import json
 import sys
 import time
+from pathlib import Path
 from typing import List, Dict, Optional
 
 
 # ─────────────────────────────────────────────────────────────
-#  Shared prompt
+#  Country knowledge block loader
 # ─────────────────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """You are an expert at analyzing OCR text extracted from historical Survey of India topographical maps.
+_PROMPTS_DIR = Path(__file__).parent.parent / 'prompts'
 
-Your task is to:
-1. CLEAN: Fix OCR errors (e.g. "Rlver" → "River", "Akb4rpur" → "Akbarpur")
-2. CLASSIFY: Assign each item a feature_type from: settlement | river | mountain | lake | forest | road | landmark | noise
-3. FILTER: Discard items that are clearly not geographic names:
-   - Scale labels (e.g. "1:50000", "Miles", "Feet")
-   - Contour values (e.g. "200", "500", "1000")
-   - Grid numbers/letters alone (e.g. "A", "1", "B2")
-   - Compass labels (N, S, E, W)
-4. SCORE: Assign a confidence 0.0-1.0 for each cleaned item
-
-Return ONLY a valid JSON array. Each element:
-{
-  "original": "<raw OCR text>",
-  "cleaned":  "<corrected name>",
-  "feature_type": "settlement|river|mountain|lake|forest|road|landmark",
-  "confidence": 0.0-1.0
+_COUNTRY_INTRO = {
+    'india':    'historical Survey of India (SOI) topographical maps, primarily covering the Indian subcontinent from the late 1800s to mid-1900s',
+    'uk':       'Ordnance Survey (OS) topographical maps of Great Britain and Northern Ireland from the 1800s to 1970s',
+    'usa':      'USGS topographic quadrangle maps of the United States from the 1880s to present',
+    'germany':  'German Topographische Karte / Messtischblatt maps from the 1870s to 1980s',
+    'france':   'French Institut Géographique National (IGN) topographic maps and historical Carte de France from the 1870s to present',
+    'pakistan': 'Survey of Pakistan (SOP) topographical maps, including pre-1947 Survey of India heritage sheets',
 }
 
-If an item should be discarded, set "feature_type" to "noise".
-Return [] if nothing is geographic. Never add commentary outside the JSON.
+
+def _load_country_block(country: str) -> str:
+    """Return the country-specific knowledge block as a string, or empty string if not found."""
+    prompt_file = _PROMPTS_DIR / f'{country}.txt'
+    if prompt_file.exists():
+        return prompt_file.read_text(encoding='utf-8').strip()
+    return ''
+
+
+def build_system_prompt(country: str = 'india') -> str:
+    """Build the full LLM system prompt with country-specific knowledge injected."""
+    country = country.lower().strip()
+    intro = _COUNTRY_INTRO.get(country, f'{country} topographical maps')
+    country_block = _load_country_block(country)
+
+    country_section = ''
+    if country_block:
+        country_section = f"""
+════════════════════════════════════════════════════════
+COUNTRY-SPECIFIC KNOWLEDGE — {country.upper()}
+════════════════════════════════════════════════════════
+{country_block}
+
 """
+
+    return f"""You are an expert at analyzing OCR text extracted from {intro}.
+
+Place names on these maps are romanised or printed in the local script conventions of the region. OCR errors are common due to aged ink, curved typography, and map symbols overlapping text.
+{country_section}
+════════════════════════════════════════════════════════
+TASK 1 — CLEAN  (fix OCR errors)
+════════════════════════════════════════════════════════
+Fix character-level OCR substitutions common in historical maps:
+• l → I  or  1    (e.g. "llpur" → "Ilpur" or "1lpur" → "Ilpur")
+• 0 → O           (e.g. "0ld Fort" → "Old Fort")
+• rn → m          (e.g. "Rarnpur" → "Rampur")
+• ii → u or n     (e.g. "Naiini Tal" → "Naini Tal")
+• vv → w          (e.g. "Nevv Delhi" → "New Delhi")
+• 8 → B           (e.g. "8ijnor" → "Bijnor")
+• 6 → G or b      (e.g. "6anga" → "Ganga")
+• broken spaces in compound names are usually OCR artifacts — rejoin them
+Apply country-specific OCR corrections listed above where relevant.
+
+════════════════════════════════════════════════════════
+TASK 2 — CLASSIFY  (assign feature_type)
+════════════════════════════════════════════════════════
+Use exactly one of these types (refer to country-specific suffixes above):
+  settlement  – village, town, city, hamlet
+  river       – river, stream, canal, nala, nadi, beck, burn, creek, ruisseau, bach
+  mountain    – hill, ridge, peak, range, ghat, ben, tor, puy, berg, mont
+  lake        – lake, tank, reservoir, jheel, loch, étang, see, pond, tarn
+  forest      – jungle, reserve forest, wood, bois, wald, forst
+  road        – road, track, path, chemin, weg, bridle path
+  landmark    – fort, temple, church, abbey, bench mark, trigonometric station, shelter, inn
+
+════════════════════════════════════════════════════════
+TASK 3 — FILTER  (discard noise — set feature_type = "noise")
+════════════════════════════════════════════════════════
+Discard ALL of these — they are map annotations, NOT geographic names:
+  • Scale / measurement text: "1:50000", "1:63360", "Miles", "Yards", "Feet", "Kilometres", "Chains"
+  • Contour elevation values: any standalone number like "100", "200", "500", "1000", "2500"
+  • Spot heights: "▲ 342", numbers near triangles
+  • Grid reference labels alone: "A", "B", "C", "1", "2", "A1", "B-3"
+  • Compass / direction labels: "N", "S", "E", "W", "NE", "NW", "SE", "SW"
+  • Sheet metadata: "Sheet No", "Revised", "Edition", "Printed", "Surveyed", year numbers alone
+  • Latitude/longitude markers: "78°30'", "25°N", degree symbols, grid zone labels
+  • Hachure / symbol legends: "Sand", "Marsh", "Scrub", "Cultivation" when printed as map legends
+  • Publisher / copyright text: any text identifying the mapping agency, copyright notice, edition note
+  Refer to country-specific noise patterns listed above for additional items to discard.
+
+════════════════════════════════════════════════════════
+TASK 4 — SCORE  (confidence 0.0–1.0)
+════════════════════════════════════════════════════════
+  1.0 = clearly a real geographic name, OCR is clean
+  0.8 = recognisable name, minor OCR artefact corrected
+  0.6 = plausible place name but some uncertainty
+  0.4 = OCR heavily garbled, best guess only
+  0.2 = very uncertain — could be noise or a name
+
+════════════════════════════════════════════════════════
+OUTPUT FORMAT — STRICT
+════════════════════════════════════════════════════════
+Return ONLY a valid JSON array. Each element must have exactly these four fields:
+{{
+  "original":     "<raw OCR text exactly as given>",
+  "cleaned":      "<corrected name with proper capitalisation>",
+  "feature_type": "settlement|river|mountain|lake|forest|road|landmark|noise",
+  "confidence":   0.0-1.0
+}}
+
+Rules:
+- Never omit any input item — every item must appear in output as either a real feature or noise
+- Never add text, markdown, or commentary outside the JSON array
+- Return [] only if the input list is empty
+"""
+
+
+# ─────────────────────────────────────────────────────────────
+#  Backward-compatible alias: SYSTEM_PROMPT uses default (india)
+# ─────────────────────────────────────────────────────────────
+SYSTEM_PROMPT = build_system_prompt('india')
 
 
 def _build_user_message(raw_texts: List[str]) -> str:
@@ -705,3 +795,252 @@ def clean_with_llm(raw_texts: List[str]) -> List[Dict]:
 
     # Should never reach here since _try_local always returns
     return _raw_passthrough(raw_texts)
+
+
+# ─────────────────────────────────────────────────────────────
+#  Ensemble: run ALL available LLMs in parallel and vote
+# ─────────────────────────────────────────────────────────────
+
+def clean_with_ensemble(raw_texts: List[str], max_workers: int = 6) -> List[Dict]:
+    """
+    Run every configured LLM simultaneously via ThreadPoolExecutor, then merge
+    results by majority vote.
+
+    Voting rules (per original text token):
+      - feature_type  → plurality vote across all LLMs that returned it
+      - cleaned       → most-common cleaned form
+      - confidence    → mean of individual confidences × agreement ratio
+        (full consensus = no penalty, 50 % agreement ≈ 0.85× penalty)
+
+    Falls back to clean_with_local() if zero LLMs are configured.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from collections import Counter
+    import config
+
+    if not raw_texts:
+        return []
+
+    # ── Build job list from whatever API keys are present ────────────────────
+    jobs: List[tuple] = []   # (display_name, callable)
+
+    # Gemini (supports two keys → two parallel calls for speed + quota)
+    gemini_keys = [k for k in [
+        getattr(config, 'GEMINI_API_KEY', ''),
+        getattr(config, 'GEMINI_API_KEY_2', ''),
+    ] if k]
+    gemini_mdl = getattr(config, 'GEMINI_MODEL', 'gemini-2.5-flash')
+    for i, gkey in enumerate(gemini_keys, 1):
+        _gkey, _gmdl = gkey, gemini_mdl   # capture in closure
+        jobs.append((f'gemini-k{i}', lambda t, k=_gkey, m=_gmdl: clean_with_gemini(t, k, m)))
+
+    # OpenAI / GPT
+    if getattr(config, 'OPENAI_API_KEY', ''):
+        _ok = config.OPENAI_API_KEY
+        _om = getattr(config, 'OPENAI_MODEL', 'gpt-4o-mini')
+        jobs.append(('openai', lambda t, k=_ok, m=_om: clean_with_openai(t, k, m)))
+
+    # Grok (xAI)
+    if getattr(config, 'GROK_API_KEY', ''):
+        _grok_k = config.GROK_API_KEY
+        _grok_m = getattr(config, 'GROK_MODEL', 'grok-3-mini')
+        jobs.append(('grok', lambda t, k=_grok_k, m=_grok_m: clean_with_grok(t, k, m)))
+
+    # Claude (Anthropic)
+    if getattr(config, 'CLAUDE_API_KEY', ''):
+        _ck = config.CLAUDE_API_KEY
+        _cm = getattr(config, 'CLAUDE_MODEL', 'claude-3-5-haiku-20241022')
+        jobs.append(('claude', lambda t, k=_ck, m=_cm: clean_with_claude(t, k, m)))
+
+    # Groq (Llama)
+    if getattr(config, 'GROQ_API_KEY', ''):
+        _grq_k = config.GROQ_API_KEY
+        _grq_m = getattr(config, 'GROQ_MODEL', 'llama-3.1-8b-instant')
+        jobs.append(('groq', lambda t, k=_grq_k, m=_grq_m: clean_with_groq(t, k, m)))
+
+    # Vertex AI (Google Cloud / service account)
+    if getattr(config, 'VERTEX_PROJECT', ''):
+        _vp = config.VERTEX_PROJECT
+        _vl = getattr(config, 'VERTEX_LOCATION', 'us-central1')
+        _vm = getattr(config, 'VERTEX_MODEL', 'gemini-2.5-flash')
+        jobs.append(('vertex', lambda t, p=_vp, l=_vl, m=_vm: clean_with_vertex(t, p, l, m)))
+
+    if not jobs:
+        print('[Ensemble] No LLM APIs configured — falling back to local classifier')
+        return clean_with_local(raw_texts)
+
+    names = [n for n, _ in jobs]
+    print(f'[Ensemble] Launching {len(jobs)} LLMs in parallel: {names}')
+
+    # ── Run all LLMs concurrently ─────────────────────────────────────────────
+    llm_outputs: Dict[str, List[Dict]] = {}   # name → result list
+
+    def _run_one(name: str, fn) -> tuple:
+        try:
+            result = fn(raw_texts)
+            print(f'[Ensemble] {name}: {len(result)} items returned')
+            return name, result
+        except QuotaExhaustedError as exc:
+            print(f'[Ensemble] {name}: quota exhausted — {exc}')
+            return name, []
+        except Exception as exc:
+            print(f'[Ensemble] {name}: error — {exc}')
+            return name, []
+
+    workers = min(max_workers, len(jobs))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_run_one, n, fn): n for n, fn in jobs}
+        for future in as_completed(futures):
+            name, result = future.result()
+            if result:
+                llm_outputs[name] = result
+
+    if not llm_outputs:
+        print('[Ensemble] All LLMs failed — falling back to local classifier')
+        return clean_with_local(raw_texts)
+
+    n_llms = len(llm_outputs)
+    print(f'[Ensemble] {n_llms}/{len(jobs)} LLMs succeeded — merging by vote...')
+
+    # ── Vote: aggregate per original-text token ───────────────────────────────
+    # votes[original] = {
+    #     'cleaned':      Counter of cleaned strings,
+    #     'feature_type': Counter of feature_type strings,
+    #     'confidences':  list of float,
+    # }
+    votes: Dict[str, Dict] = {}
+
+    for _name, items in llm_outputs.items():
+        for item in items:
+            orig = item.get('original', '').strip()
+            if not orig:
+                continue
+            if orig not in votes:
+                votes[orig] = {
+                    'cleaned':      Counter(),
+                    'feature_type': Counter(),
+                    'confidences':  [],
+                }
+            votes[orig]['cleaned'][item.get('cleaned', orig)] += 1
+            votes[orig]['feature_type'][item.get('feature_type', 'unknown')] += 1
+            votes[orig]['confidences'].append(float(item.get('confidence', 0.5)))
+
+    # ── Build merged output ───────────────────────────────────────────────────
+    merged: List[Dict] = []
+    for orig, data in votes.items():
+        best_cleaned, top_cleaned_votes = data['cleaned'].most_common(1)[0]
+        best_type,    top_type_votes    = data['feature_type'].most_common(1)[0]
+
+        total_votes   = sum(data['feature_type'].values())
+        agreement     = top_type_votes / total_votes          # 0..1
+        avg_conf      = sum(data['confidences']) / len(data['confidences'])
+
+        # Boost for consensus: full agreement → no deduction; 50 % → 0.85x
+        final_conf = min(0.99, avg_conf * (0.70 + 0.30 * agreement))
+
+        merged.append({
+            'original':     orig,
+            'cleaned':      best_cleaned,
+            'feature_type': best_type,
+            'confidence':   round(final_conf, 4),
+            'llm_count':    total_votes,
+            'agreement':    round(agreement, 3),
+        })
+
+    # Sort to preserve stable ordering (highest confidence first)
+    merged.sort(key=lambda x: x['confidence'], reverse=True)
+
+    kept    = sum(1 for m in merged if m['feature_type'] != 'noise')
+    noise   = len(merged) - kept
+    print(f'[Ensemble] Merged {len(merged)} items '
+          f'({kept} features, {noise} noise) from {n_llms} LLMs')
+    return merged
+
+
+# ─────────────────────────────────────────────────────────────
+#  Historical spelling normalisation
+# ─────────────────────────────────────────────────────────────
+
+_SPELLING_VARIANTS: Optional[Dict[str, str]] = None
+
+
+def _load_spelling_variants() -> Dict[str, str]:
+    """
+    Load prompts/spelling_variants.json and return a flat dict
+    { historical_form_lower → canonical_form }.
+    Cached after first call.
+    """
+    global _SPELLING_VARIANTS
+    if _SPELLING_VARIANTS is not None:
+        return _SPELLING_VARIANTS
+
+    variants_path = _PROMPTS_DIR / 'spelling_variants.json'
+    flat: Dict[str, str] = {}
+
+    if not variants_path.exists():
+        _SPELLING_VARIANTS = flat
+        return flat
+
+    try:
+        raw = json.loads(variants_path.read_text(encoding='utf-8'))
+        for section_key, mapping in raw.items():
+            if section_key == 'meta':
+                continue
+            if isinstance(mapping, dict):
+                for hist, canonical in mapping.items():
+                    flat[hist.lower()] = canonical
+    except Exception as exc:
+        print(f'[Spelling] Failed to load spelling_variants.json: {exc}')
+
+    _SPELLING_VARIANTS = flat
+    print(f'[Spelling] Loaded {len(flat)} historical spelling variants')
+    return flat
+
+
+def normalise_spelling(text: str) -> str:
+    """
+    Replace a historical/colonial spelling with the canonical modern form.
+    Performs whole-word, case-insensitive substitution.
+    Returns the input unchanged if no variant is found.
+    """
+    variants = _load_spelling_variants()
+    if not variants:
+        return text
+
+    import re as _re2
+    # Try the full text first (exact match after stripping)
+    lookup = text.strip().lower()
+    if lookup in variants:
+        # Preserve original capitalisation style of first char
+        canonical = variants[lookup]
+        if text and text[0].isupper() and canonical:
+            return canonical[0].upper() + canonical[1:]
+        return canonical
+
+    # Word-by-word substitution for multi-word strings
+    def _replace_word(m: '_re2.Match') -> str:
+        word = m.group(0)
+        replacement = variants.get(word.lower())
+        if replacement is None:
+            return word
+        # Match capitalisation of the original word
+        if word[0].isupper():
+            return replacement[0].upper() + replacement[1:]
+        return replacement
+
+    return _re2.sub(r"[A-Za-z']+", _replace_word, text)
+
+
+def apply_spelling_normalisation(items: List[Dict]) -> List[Dict]:
+    """
+    Run normalise_spelling() over the 'cleaned' field of every item in a
+    list of LLM-output dicts.  Modifies in-place and returns the list.
+    """
+    _load_spelling_variants()   # ensure cache is warm
+    for item in items:
+        original_cleaned = item.get('cleaned', '')
+        normalised = normalise_spelling(original_cleaned)
+        if normalised != original_cleaned:
+            item['cleaned']         = normalised
+            item['spelling_source'] = original_cleaned   # keep provenance
+    return items

@@ -10,30 +10,59 @@ import sys
 from pathlib import Path
 
 import config
-from utils.db_utils import query_features, export_csv
+from utils.db_utils import query_features, export_csv, search_fulltext, get_stats
 
 DB_PATH = config.RESULTS_FOLDER / 'toposheet.db'
 
 
 def print_results(results: list, title: str = '') -> None:
     if title:
-        print(f'\n{"="*60}')
+        print(f'\n{"="*72}')
         print(f'  {title}')
-        print(f'{"="*60}')
+        print(f'{"="*72}')
     if not results:
         print('  (no results found)\n')
         return
     print(f'  Found {len(results)} feature(s):\n')
-    fmt = '  {:<30} {:<15} {:<8} {:<6}'
-    print(fmt.format('Feature Name', 'Type', 'Grid', 'Conf'))
-    print('  ' + '-' * 60)
+    fmt = '  {:<28} {:<28} {:<12} {:<8} {:<5}'
+    print(fmt.format('As Written on Map', 'Normalised Name', 'Type', 'Grid', 'Conf'))
+    print('  ' + '-' * 72)
     for r in results:
+        raw     = (r.get('original_text') or r['feature_name'])[:27]
+        cleaned = r['feature_name'][:27]
+        same    = raw.lower() == cleaned.lower()
+        # Show arrow only when normalization actually changed the text
+        name_col = cleaned if same else f'{raw} → {cleaned}'
         print(fmt.format(
-            r['feature_name'][:29],
-            r['feature_type'][:14],
+            raw[:27],
+            cleaned[:27],
+            r['feature_type'][:11],
             r['grid_reference'][:7],
             f"{r['confidence']:.2f}",
         ))
+    print()
+
+
+def print_stats(stats: dict) -> None:
+    print(f'\n{"="*60}')
+    print('  DATABASE SUMMARY')
+    print(f'{"="*60}')
+    print(f'  Total features  : {stats["total"]}')
+    print(f'\n  By feature type:')
+    for ftype, cnt in stats['by_type'].items():
+        print(f'    {ftype:<20} {cnt}')
+    print(f'\n  By map:')
+    for mname, cnt in stats['by_map'].items():
+        print(f'    {mname[:40]:<42} {cnt}')
+    c = stats['confidence']
+    print(f'\n  Confidence:')
+    print(f'    High  (≥0.8)   : {c["high_0.8+"]}')
+    print(f'    Medium (0.5-0.8): {c["medium_0.5-0.8"]}')
+    print(f'    Low   (<0.5)   : {c["low_under_0.5"]}')
+    print(f'    Average        : {c["average"]}')
+    print(f'\n  Top 10 most common names:')
+    for name, cnt in stats['top_names']:
+        print(f'    {name:<35} ×{cnt}')
     print()
 
 
@@ -42,12 +71,14 @@ def interactive_menu() -> None:
     print('  CV-Toposheet: Map Feature Search')
     print('='*60)
     print('  Commands:')
-    print('    1  List all features (alphabetical)')
-    print('    2  Filter by feature type')
-    print('    3  Filter by grid reference')
-    print('    4  Search by name')
-    print('    5  Filter by map')
-    print('    6  Export current search to CSV')
+    print('    1  Database summary & statistics')
+    print('    2  List all features (alphabetical)')
+    print('    3  Filter by feature type')
+    print('    4  Filter by grid reference')
+    print('    5  Search by name (full-text)')
+    print('    6  Filter by map')
+    print('    7  High-confidence only (≥0.8)')
+    print('    8  Export current search to CSV')
     print('    q  Quit')
     print('='*60 + '\n')
 
@@ -60,30 +91,39 @@ def interactive_menu() -> None:
             break
 
         elif cmd == '1':
+            stats = get_stats(str(DB_PATH))
+            print_stats(stats)
+
+        elif cmd == '2':
             last_results = query_features(str(DB_PATH), min_confidence=0.3)
             print_results(last_results, 'All Features (A→Z)')
 
-        elif cmd == '2':
+        elif cmd == '3':
             ftype = input('  Feature type (settlement/river/mountain/lake/forest/road/landmark): ').strip()
             last_results = query_features(str(DB_PATH), feature_type=ftype, min_confidence=0.3)
             print_results(last_results, f'Features of type: {ftype}')
 
-        elif cmd == '3':
+        elif cmd == '4':
             grid = input('  Grid reference (e.g. B-3): ').strip().upper()
             last_results = query_features(str(DB_PATH), grid_ref=grid)
             print_results(last_results, f'Features in grid {grid}')
 
-        elif cmd == '4':
-            name = input('  Search name (partial match): ').strip()
-            last_results = query_features(str(DB_PATH), search_name=name, min_confidence=0.3)
-            print_results(last_results, f'Features matching "{name}"')
-
         elif cmd == '5':
+            query = input('  Search (e.g. "rampur" or "nala river"): ').strip()
+            last_results = search_fulltext(str(DB_PATH), query)
+            print_results(last_results, f'Full-text search: "{query}"')
+
+        elif cmd == '6':
             map_name = input('  Map name (partial match): ').strip()
             last_results = query_features(str(DB_PATH), map_name=map_name, min_confidence=0.3)
             print_results(last_results, f'Features in map: {map_name}')
 
-        elif cmd == '6':
+        elif cmd == '7':
+            ftype = input('  Feature type (blank = all): ').strip() or None
+            last_results = query_features(str(DB_PATH), feature_type=ftype, min_confidence=0.8)
+            print_results(last_results, f'High-confidence features (≥0.8){" — " + ftype if ftype else ""}')
+
+        elif cmd == '8':
             if not last_results:
                 print('  No results to export. Run a query first.\n')
                 continue
@@ -96,7 +136,7 @@ def interactive_menu() -> None:
             print(f'  Exported {len(last_results)} rows to: {out}\n')
 
         else:
-            print('  Unknown command. Enter 1-6 or q.\n')
+            print('  Unknown command. Enter 1-8 or q.\n')
 
 
 def cli_mode(args: list) -> None:

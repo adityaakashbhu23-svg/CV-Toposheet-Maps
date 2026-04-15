@@ -22,12 +22,52 @@ CREATE TABLE IF NOT EXISTS features (
     bbox_x1         INTEGER,
     bbox_y1         INTEGER,
     bbox_x2         INTEGER,
-    bbox_y2         INTEGER
+    bbox_y2         INTEGER,
+    lat_min         REAL,
+    lat_max         REAL,
+    lon_min         REAL,
+    lon_max         REAL,
+    sheet_ref       TEXT,    -- SOI canonical ref e.g. "72P/16"
+    district        TEXT,    -- district name from filename
+    survey_year     INTEGER, -- year map was surveyed/published
+    map_scale       INTEGER, -- 63360 (1-inch) or 50000 or 25000
+    verified        INTEGER DEFAULT 0   -- 0=unverified, 1=human-confirmed correct
 );
+CREATE INDEX IF NOT EXISTS idx_year      ON features(survey_year);
+CREATE INDEX IF NOT EXISTS idx_district  ON features(district);
+CREATE INDEX IF NOT EXISTS idx_sheet     ON features(sheet_ref);
 CREATE INDEX IF NOT EXISTS idx_map        ON features(map_name);
 CREATE INDEX IF NOT EXISTS idx_type       ON features(feature_type);
 CREATE INDEX IF NOT EXISTS idx_grid       ON features(grid_reference);
 CREATE INDEX IF NOT EXISTS idx_name       ON features(feature_name);
+CREATE INDEX IF NOT EXISTS idx_conf       ON features(confidence);
+
+-- FTS5 virtual table: searches feature_name  AND  original_text
+-- so both the normalised name AND the exact text as written on the map are found.
+CREATE VIRTUAL TABLE IF NOT EXISTS features_fts USING fts5(
+    feature_name,
+    original_text,
+    map_name,
+    content='features',
+    content_rowid='id'
+);
+"""
+
+FTS_TRIGGERS = """
+CREATE TRIGGER IF NOT EXISTS features_ai AFTER INSERT ON features BEGIN
+    INSERT INTO features_fts(rowid, feature_name, original_text, map_name)
+    VALUES (new.id, new.feature_name, new.original_text, new.map_name);
+END;
+CREATE TRIGGER IF NOT EXISTS features_au AFTER UPDATE ON features BEGIN
+    INSERT INTO features_fts(features_fts, rowid, feature_name, original_text, map_name)
+    VALUES ('delete', old.id, old.feature_name, old.original_text, old.map_name);
+    INSERT INTO features_fts(rowid, feature_name, original_text, map_name)
+    VALUES (new.id, new.feature_name, new.original_text, new.map_name);
+END;
+CREATE TRIGGER IF NOT EXISTS features_ad AFTER DELETE ON features BEGIN
+    INSERT INTO features_fts(features_fts, rowid, feature_name, original_text, map_name)
+    VALUES ('delete', old.id, old.feature_name, old.original_text, old.map_name);
+END;
 """
 
 
@@ -41,6 +81,7 @@ def init_db(db_path: str) -> None:
     """Create the database and table schema if they don't exist."""
     conn = get_connection(db_path)
     conn.executescript(DB_SCHEMA)
+    conn.executescript(FTS_TRIGGERS)
     conn.commit()
     conn.close()
     print(f'[DB] Initialized database: {db_path}')
@@ -59,8 +100,10 @@ def insert_features(db_path: str, features: List[Dict]) -> int:
                 INSERT INTO features
                 (map_name, original_text, feature_name, feature_type,
                  grid_reference, confidence, tile_x, tile_y,
-                 bbox_x1, bbox_y1, bbox_x2, bbox_y2)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                 bbox_x1, bbox_y1, bbox_x2, bbox_y2,
+                 lat_min, lat_max, lon_min, lon_max,
+                 sheet_ref, district, survey_year, map_scale)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 f.get('map_name', ''),
                 f.get('original_text', ''),
@@ -74,6 +117,14 @@ def insert_features(db_path: str, features: List[Dict]) -> int:
                 f.get('bbox_y1', 0),
                 f.get('bbox_x2', 0),
                 f.get('bbox_y2', 0),
+                f.get('lat_min'),
+                f.get('lat_max'),
+                f.get('lon_min'),
+                f.get('lon_max'),
+                f.get('sheet_ref'),
+                f.get('district'),
+                f.get('survey_year'),
+                f.get('map_scale'),
             ))
             inserted += 1
         except Exception as e:
@@ -124,9 +175,10 @@ def export_json(db_path: str, json_path: str) -> None:
         if ftype not in output[map_key]:
             output[map_key][ftype] = []
         output[map_key][ftype].append({
-            'name':      row['feature_name'],
-            'grid':      row['grid_reference'],
-            'confidence': row['confidence'],
+            'name':           row['feature_name'],
+            'original_text':  row['original_text'],
+            'grid':           row['grid_reference'],
+            'confidence':     row['confidence'],
         })
 
     with open(json_path, 'w', encoding='utf-8') as f:
@@ -174,7 +226,109 @@ def query_features(
         WHERE  {where}
         ORDER  BY feature_name
     """
+    sql = f"""
+        SELECT map_name, original_text, feature_name, feature_type,
+               grid_reference, confidence
+        FROM   features
+        WHERE  {where}
+        ORDER  BY feature_name
+    """
     cursor = conn.execute(sql, params)
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
     return rows
+
+
+def search_fulltext(db_path: str, query: str, limit: int = 50) -> List[Dict]:
+    """
+    Full-text search across feature_name and map_name using the FTS5 index.
+    Supports partial words and multi-word queries.
+    Returns results ranked by relevance (BM25 score).
+    Example: search_fulltext(db, "rampur river") finds all river entries
+             with 'rampur' in the name across all maps.
+    """
+    conn = get_connection(db_path)
+    try:
+        cursor = conn.execute("""
+            SELECT f.map_name, f.original_text, f.feature_name, f.feature_type,
+                   f.grid_reference, f.confidence,
+                   rank AS relevance_score
+            FROM   features_fts
+            JOIN   features f ON features_fts.rowid = f.id
+            WHERE  features_fts MATCH ?
+              AND  f.feature_type != 'noise'
+            ORDER  BY rank
+            LIMIT  ?
+        """, (query, limit))
+        rows = [dict(r) for r in cursor.fetchall()]
+    except Exception as e:
+        print(f'[DB/FTS] Full-text search error: {e}')
+        # Fallback to LIKE search
+        rows = query_features(db_path, search_name=query)
+    conn.close()
+    return rows
+
+
+def get_stats(db_path: str) -> Dict:
+    """
+    Return a summary statistics dict for the whole database:
+    - total features, per-type counts
+    - per-map counts
+    - confidence distribution
+    - top 10 most common feature names
+    """
+    conn = get_connection(db_path)
+
+    stats: Dict = {}
+
+    # Total
+    stats['total'] = conn.execute(
+        "SELECT COUNT(*) FROM features WHERE feature_type != 'noise'"
+    ).fetchone()[0]
+
+    # Per type
+    rows = conn.execute("""
+        SELECT feature_type, COUNT(*) AS cnt
+        FROM   features
+        WHERE  feature_type != 'noise'
+        GROUP  BY feature_type
+        ORDER  BY cnt DESC
+    """).fetchall()
+    stats['by_type'] = {r['feature_type']: r['cnt'] for r in rows}
+
+    # Per map
+    rows = conn.execute("""
+        SELECT map_name, COUNT(*) AS cnt
+        FROM   features
+        WHERE  feature_type != 'noise'
+        GROUP  BY map_name
+        ORDER  BY cnt DESC
+    """).fetchall()
+    stats['by_map'] = {r['map_name']: r['cnt'] for r in rows}
+
+    # Confidence bands
+    high   = conn.execute("SELECT COUNT(*) FROM features WHERE confidence >= 0.8 AND feature_type != 'noise'").fetchone()[0]
+    medium = conn.execute("SELECT COUNT(*) FROM features WHERE confidence >= 0.5 AND confidence < 0.8 AND feature_type != 'noise'").fetchone()[0]
+    low    = conn.execute("SELECT COUNT(*) FROM features WHERE confidence < 0.5  AND feature_type != 'noise'").fetchone()[0]
+    avg    = conn.execute("SELECT AVG(confidence) FROM features WHERE feature_type != 'noise'").fetchone()[0]
+    stats['confidence'] = {
+        'high_0.8+':    high,
+        'medium_0.5-0.8': medium,
+        'low_under_0.5':  low,
+        'average':        round(avg or 0, 3),
+    }
+
+    # Top 10 most common names (excluding grid-label noise)
+    rows = conn.execute("""
+        SELECT feature_name, COUNT(*) AS cnt
+        FROM   features
+        WHERE  feature_type != 'noise'
+          AND  LENGTH(feature_name) > 2
+        GROUP  BY LOWER(feature_name)
+        ORDER  BY cnt DESC
+        LIMIT  10
+    """).fetchall()
+    stats['top_names'] = [(r['feature_name'], r['cnt']) for r in rows]
+
+    conn.close()
+    return stats

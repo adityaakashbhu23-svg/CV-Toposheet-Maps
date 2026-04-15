@@ -13,8 +13,10 @@ from pathlib import Path
 
 import config
 from utils.db_utils import init_db, insert_features, export_csv, export_json
+from utils.metadata_utils import parse_soi_filename
 
-LLM_PATH  = config.LOGS_FOLDER    / 'llm_corrections.json'
+LLM_PATH   = config.LOGS_FOLDER    / 'llm_corrections.json'
+GRID_PATH  = config.LOGS_FOLDER    / 'grid_detection.json'   # for cell coordinates
 DB_PATH   = config.RESULTS_FOLDER / 'toposheet.db'
 CSV_PATH  = config.RESULTS_FOLDER / 'extracted_data.csv'
 JSON_PATH = config.RESULTS_FOLDER / 'extracted_data.json'
@@ -31,6 +33,14 @@ def build_database() -> None:
     with open(LLM_PATH, encoding='utf-8') as f:
         llm_data = json.load(f)
 
+    # Load cell coordinates from grid detection if available
+    cell_coords_all: dict = {}   # map_name → {grid_ref → {lat_min,...}}
+    if GRID_PATH.exists():
+        with open(GRID_PATH, encoding='utf-8') as f:
+            grid_data = json.load(f)
+        for mn, gd in grid_data.items():
+            cell_coords_all[mn] = gd.get('cell_coords', {})
+
     # Initialize (or reset) database
     if DB_PATH.exists():
         DB_PATH.unlink()
@@ -42,27 +52,48 @@ def build_database() -> None:
         if not features:
             continue
 
-        # Flatten bbox into individual columns
+        cell_coords = cell_coords_all.get(map_name, {})
+
+        # Parse sheet metadata (block, district, year, scale) from filename
+        meta = parse_soi_filename(map_name)
+        sheet_ref   = meta.get('sheet_ref')
+        district    = meta.get('district') or ''
+        survey_year = meta.get('year')
+        map_scale   = meta.get('scale_guess')
+
+        # Flatten bbox into individual columns + attach coordinates per cell
         db_records = []
         for feat in features:
             bbox = feat.get('bbox', [0, 0, 0, 0])
             bbox = bbox if len(bbox) == 4 else [0, 0, 0, 0]
+            grid_ref = feat.get('grid_reference', '')
+            cell = cell_coords.get(grid_ref, {})
             db_records.append({
                 'map_name':      feat.get('map_name', map_name),
                 'original_text': feat.get('original_text', ''),
                 'feature_name':  feat.get('feature_name', ''),
                 'feature_type':  feat.get('feature_type', 'unknown'),
-                'grid_reference':feat.get('grid_reference', ''),
+                'grid_reference': grid_ref,
                 'confidence':    feat.get('confidence', 0.0),
                 'tile_x':        0,
                 'tile_y':        0,
                 'bbox_x1': bbox[0], 'bbox_y1': bbox[1],
                 'bbox_x2': bbox[2], 'bbox_y2': bbox[3],
+                'lat_min': cell.get('lat_min'),
+                'lat_max': cell.get('lat_max'),
+                'lon_min': cell.get('lon_min'),
+                'lon_max': cell.get('lon_max'),
+                'sheet_ref':   sheet_ref,
+                'district':    district,
+                'survey_year': survey_year,
+                'map_scale':   map_scale,
             })
 
         n = insert_features(str(DB_PATH), db_records)
         total_inserted += n
-        print(f'[DB] {map_name}: inserted {n} features')
+        coords_found = sum(1 for r in db_records if r.get('lat_min') is not None)
+        meta_str = f'{district} {survey_year}' if district and survey_year else map_name
+        print(f'[DB] {meta_str} ({sheet_ref or map_name}): {n} features  ({coords_found} with coords)')
 
     print(f'\n[DB] Total features in database: {total_inserted}')
 

@@ -1,0 +1,214 @@
+COUNTRY: India — Survey of India (SOI) Topographical Maps
+ERA: 1750s–1999  (covering British colonial, Independence & modern periods)
+LANGUAGES: Hindi, Urdu, Bengali, Telugu, Marathi, Punjabi, Tamil, Kannada, Odia, Assamese (all romanised on map)
+
+═══════════════════════════════════════════════════════
+SECTION 1 — GEOGRAPHIC FEATURE SUFFIXES (classify feature_type)
+═══════════════════════════════════════════════════════
+
+RIVER / WATER FLOW:
+  Nala, Nadi, Naddi, Nullah, Khad, Khadd, Chaur, Jhora, Drein, Drain,
+  Canal, Nahar, Nahr, Rajbaha (irrigation branch), Feeder, Distributary,
+  Sagar (when water body), Kosi, Ganga (as common word), R. (= River abbrev)
+
+LAKE / POND / RESERVOIR:
+  Jheel, Jhil, Taal, Tal, Talab, Talav, Pokhar, Tank, Kund, Kunda,
+  Sagar (when lake), Reservoir, Beel, Haor, Baor, Bor (Bengal/NE India)
+
+MOUNTAIN / HILL / RIDGE:
+  Pahar, Pahad, Parbat, Ghat, Ghats, Dhar, Tilla, Dungri, Dhar,
+  Kho, Dun (valley between hills), Khola (steep valley), Munda, Burj (tower hill),
+  Range, Peak, Pik, Summit, Pass, Ghati, Nag (as in Nagpur = snake hill)
+
+SETTLEMENT (by administrative tier):
+  City/Town: Nagar, Shahar, Pura, Puram, Pur
+  Village:   Gaon, Gram, Grama, Tola, Patti, Basti, Dhani, Dih, Diha
+  Quarter:   Mohalla, Mohilla, Para, Palli
+  Market:    Ganj, Gunj, Bazar, Bazaar, Hat, Haat (weekly market), Mandi
+  Fort town: Kot, Kota, Garh, Gadh, Ghera, Kachahari
+  Admin:     Kalan (big/main), Khurd (small/junior), Jadid (new), Qadim/Kadim (old),
+             Abad (populated), Mafi (revenue-free land), Sarai (rest stop)
+
+FOREST / VEGETATION:
+  Jungle, RF (Reserve Forest), PF (Protected Forest), Van, Vana, Ban,
+  Aranya, Jhau (tamarisk thicket), Bambu (bamboo), Sal, Teak plantation
+
+LANDMARK / CULTURAL:
+  Fort, Qila, Kila, Mahal, Haveli, Mandir, Math, Deul, Devalaya (temple),
+  Masjid, Dargah, Dargh, Mazaar, Mazar (shrine), Imambara (Shia mausoleum),
+  Gurdwara, Church, Cathedral, Monastery, Vihara
+  Tila, Tilla (mound), Dheri (mound/ruin), Khanqah (Sufi lodge)
+  Dak Bungalow (postal rest house), Bungalow, Sarai, Rest House, Inspection Bungalow
+  B.M. (Bench Mark), G.T.S. (Great Trigonometrical Survey mark), T.S. (Traverse Station)
+  Chhatri (cenotaph), Ghat (riverbank steps), Baoli, Bawdi (step-well)
+
+TRANSPORT:
+  G.T. Road (Grand Trunk Road), Road, Metalled Road, Unmetalled Road,
+  Track, Bridle Path, Footpath, Cart Track, Camel Track
+  R.S. or Rly (Railway Station), Jn. (Junction), Halt, Siding
+  Canal Road, Embankment, Bund (earthen dam/embankment)
+
+ADMINISTRATIVE / SURVEY MARKS:
+  Dist. = District boundary, Sub-Div. = Sub-Division, Teh. = Tahsil/Taluka
+  Pargana / Parganas (historical revenue division)
+  Zamindari (landlord estate, pre-1947)
+  Cantonment / Cantt. (military area), Civil Lines (British-era admin zone)
+
+═══════════════════════════════════════════════════════
+SECTION 2 — OCR ERROR PATTERNS ON OLD SOI MAPS
+═══════════════════════════════════════════════════════
+
+CHARACTER CONFUSIONS (common on aged ink / faded print):
+  rn → m      ("Rarnpur" → "Rampur", "Barnala" is correct not "Bam ala")
+  ii → u/n    ("Naiini" → "Naini",  "Delhii" → "Delhi")
+  vv → w      ("Nevv" → "New",  "Navvab" → "Nawab")
+  8 → B       ("8ijnor" → "Bijnor",  "8engal" → "Bengal")
+  6 → G       ("6anga" → "Ganga",  "6aya" → "Gaya")
+  0 → O       ("0udhpur" → "Oudh pur → Oudh",  "0orakhpur" → "Gorakhpur")
+  1 → I / l   ("1ndia" → "India",  "Ba1ly" → "Bally")
+  c → e       ("Allahubad" → "Allahabad")
+  broken space → rejoin:
+    "Allaha bad" → "Allahabad"
+    "Pala mau"   → "Palamau"
+    "Haza ri bagh" → "Hazaribagh"
+    "Muz affarpur" → "Muzaffarpur"
+    "Cham paran" → "Champaran"
+  dot-above → ignored:  "Māhābhārata" → "Mahabharata"
+  faded final consonant: "Patna" misread as "Patm" or "Patn"
+
+SCRIPT-SPECIFIC ISSUES:
+  Urdu-origin words often have silent consonants: "Khwaja" → OCR may give "Khwaga"
+  Persian/Urdu: kh, gh, sh, ch clusters may be split by OCR
+  Old Gothic/italic print (pre-1900 maps): f → s, long-s → f, ct → df
+
+ABBREVIATIONS ON MAP MARGINS:
+  "Surv." or "Surveyed by …"   (top margin, NOT a feature)
+  "Pubd." = Published
+  "Coy." = Company (as in East India Company era maps)
+  "Engd." = Engraved
+  "Sheet No." / "No." = sheet number reference (NOT a place name)
+  "Corrd." = Corrected
+  Scale bar text: "Miles", "Furlongs", "Chains", "Yards", "Kilometres"
+  "R.F. 1/63360" = Representative Fraction (NOT a place name)
+  "Restricted" / "Open Survey Sheet" / "Confidential" (security classification, ignore)
+  "Magnetic Declination" / "Variation" text (NOT a feature)
+  "Contour interval … feet/metres" (NOT a feature)
+
+═══════════════════════════════════════════════════════
+SECTION 3 — GRID SYSTEM ON SOI SHEETS
+═══════════════════════════════════════════════════════
+
+IMPORTANT — DO NOT confuse these with grid labels:
+  Large decorative area-name letters printed across the map body
+  (e.g. "P U R H A T", "B E N G A L", "B I H A R" spanning the map)
+  are the DISTRICT/REGION NAME, not grid identifiers.
+  True grid labels are SMALL letters/numbers printed ONLY in the margin area.
+
+GRID COLUMN LABELS (in top + bottom margin):   A  B  C  D
+GRID ROW LABELS    (in left + right margin):   1  2  3  4
+→ Cell reference = letter + hyphen + number, e.g. "B-3"
+
+Old 1:63,360 (1-inch) maps may show a 4×4 grid (16 cells) or a 3×4 grid (12 cells).
+1:50,000 maps consistently show a 4×4 grid (16 cells, labelled A–D × 1–4).
+
+═══════════════════════════════════════════════════════
+SECTION 4 — HISTORICAL ERA CONVENTIONS (1750–1999)
+═══════════════════════════════════════════════════════
+
+COLONIAL ERA (pre-1947) PLACE NAMES → use original as found, do not modernize:
+  Calcutta   (modern Kolkata)      Bombay    (modern Mumbai)
+  Madras     (modern Chennai)      Poona     (modern Pune)
+  Dacca      (modern Dhaka, now Bangladesh)
+  Cawnpore   (modern Kanpur)       Allahabad (modern Prayagraj)
+  Benares    (modern Varanasi)     Baroda    (modern Vadodara)
+  Hyderabad  (undivided, may refer to Pakistan Hyderabad post-1947)
+  Lyallpur   (modern Faisalabad, Pakistan)
+  Montgomery (modern Sahiwal, Pakistan)
+  Simla      (modern Shimla)       Quetta    (now Pakistan)
+  Peshawar   (now Pakistan)        Lahore    (now Pakistan)
+  Rangoon    (now Yangon, Myanmar — some maps include Burma/Myanmar)
+  Colombo    (Sri Lanka — some maps show Ceylon)
+NOTE: preserve the historically-attested spelling found on the map.
+
+EARLY MAPS (1750–1870) — Great Trigonometrical Survey era:
+  May contain proto-place names, village names since renamed or merged.
+  Settlement names often in older Anglicised transliteration:
+    Shahjehanpore → Shahjahanpur
+    Moorshedabad  → Murshidabad
+    Meerut / Mirath / Merut → Meerut
+    Furruckabad → Farrukhabad
+    Azimghur    → Azamgarh
+    Ghazepore   → Ghazipur
+  Place names may have superfluous "h" at end: "Delhih", "Aghrah"
+
+REVENUE / ADMINISTRATIVE TERMS (preserve these as landmarks):
+  Zamindar, Zamindari Estate, Jagir, Jagirdar (land grants)
+  Muafi, Mafi (tax-exempt land)
+  Tappa (revenue sub-unit below pargana)
+  Mahal (revenue estate, not always a palace)
+  Inam, Inami (granted land)
+  Civil Lines, Sadar Bazar, Collectorate, Tehsildar's Office
+  Thana / Thanah (police station)
+  Post Office (P.O.), Sub-Post Office (S.P.O.), Telegraph Office (T.O.)
+
+MILITARY / STRATEGIC (common on colonial-era maps):
+  Cantonment / Cantt, Lines, Barracks, Magazine, Arsenal
+  Parade Ground, Rifle Range, Fort, Redoubt
+  Battery (coastal artillery position)
+  E.I.C. = East India Company (pre-1858)
+
+RELIGIOUS GEOGRAPHY:
+  Tirth, Tirtha (Hindu pilgrimage site)
+  Dham (major pilgrimage centre: Char Dham routes appear on maps)
+  Akhara (wrestlers' / ascetics' compound)
+  Mela Ground, Fair Ground (seasonal gathering sites)
+
+WELL / IRRIGATION (North India and Punjab):
+  Persian Wheel (animal-powered well), Lift Irrigation
+  Tube Well / T.W.  (appears after 1920s maps of Punjab/UP)
+  Inundation Canal (seasonal), Perennial Canal
+  Head Works / Head Regulator (canal control structures)
+
+═══════════════════════════════════════════════════════
+SECTION 5 — SCALE LINE / LEGEND NOISE (never classify as features)
+═══════════════════════════════════════════════════════
+
+The following text strings are LEGEND, MARGIN notes, or SCALE BAR items:
+  Any line containing: Miles, Furlongs, Chains, Yards, Fathoms, Links
+  "1 Inch = 1 Mile" / "1 inch = 1 statute mile"
+  "1 : 63,360" / "1/63360" / "Scale R.F." / "Representative Fraction"
+  "1 : 50,000" / "1 : 25,000"
+  "Heights in Feet" / "Heights in Metres" / "Contour interval"
+  Spot heights as plain numbers: "1234", "578 ft", "234 m" — these are elevations
+  "Surveyed in …" / "Revised in …" / "Published …"
+  "Government of India" / "Surveyor General of India"
+  "Survey of India" / "S.O.I." (publisher credit, not a feature)
+  "Printed at …" / "Engraved at …"
+  Roman numerals used as sheet corner annotations: IV, VIII etc.
+  Longitude / Latitude degree markers at map edges: "24°", "87°30'"
+  "From Greenwich" / "From Madras Meridian" (datum note)
+  "Magnetic Variation … West" / "Annual change"
+  "Toposheet" (generic label)
+
+═══════════════════════════════════════════════════════
+SECTION 6 — ZENODO / JOHN BROWN COLLECTION FILENAME FORMAT
+═══════════════════════════════════════════════════════
+
+Files from https://zenodo.org/records/8388147 follow this pattern:
+  "<block> <letter>]<num> <District> (<year>)[optional].jpg"
+  e.g.  "72 P]16 Birbhum District (1924).jpg"
+        "72 B]04 Siwan District (1974) BW@.jpg"
+        "72 F]02 and F[06 Champaran District (1915).jpg"
+
+CODES in filename:
+  BW = Black & White photographic scan (lower contrast)
+  @  = Damaged / partial sheet
+  Preliminary = early, un-revised survey
+  35MM-FILMED = microfilm reproduction (may have vignetting)
+
+SHEET NUMBERING (SOI standard):
+  Block = 1° × 1° square (e.g. Block 72 = approx. 23–24°N, 86–87°E)
+  Letter = A–P (skipping I), sub-divides block into 4 columns × 4 rows
+  Number = 1–16, sub-divides the letter block into a 4×4 internal grid
+  Full ref: "72P/16" means block 72, letter P, sub-sheet 16
+

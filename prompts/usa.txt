@@ -1,0 +1,33 @@
+COUNTRY: United States — USGS Topographic Maps
+ERA: 1880s–present
+SERIES: 7.5-minute quadrangle (1:24,000), 15-minute (1:62,500), 30x60-minute (1:100,000), 1-degree (1:250,000)
+LANGUAGE: English; Spanish names in SW states (Arizona, California, New Mexico, Texas)
+
+GEOGRAPHIC SUFFIXES — use to classify feature_type:
+  RIVER:      Creek (most common), Run, Branch, Fork (N/S/E/W/Middle), Bayou (Louisiana/Texas), Slough, Arroyo (SW), Acequia (SW irrigation ditch), River, Stream, Kill (NY/NJ Dutch), Run
+  LAKE:       Lake, Pond, Reservoir, Loch, Lagoon, Playa (dry lake), Marsh, Swamp, Slough (wetland)
+  MOUNTAIN:   Mountain, Mount (Mt.), Peak, Butte (flat-topped), Mesa (Spanish: flat-top), Plateau, Ridge, Knob, Knoll, Hill, Bluff, Cliff, Ledge, Spur, Saddle, Pass, Gap, Col
+  VALLEY:     Valley, Hollow (Holler), Draw, Gulch, Ravine, Canyon, Coulee (NW), Glen
+  SETTLEMENT: -ville, -burg/-burg, -ton, -ford, -boro/-borough, -city, Junction (rail junction), Crossing, Station, Landing (river port)
+  FOREST:     National Forest, State Forest, Wilderness, Park, Reserve, Timber Reserve
+  LANDMARK:   Bench Mark (BM), Triangulation Station (Tri Sta.), Cemetery, Church, School, Mine, Quarry, Dam, Bridge, Ford, Tower, Tank (water)
+  ROAD:       Highway, US Hwy, State Hwy, County Road (CR), Forest Road (FR), Trail
+
+LAND SURVEY SYSTEM — Public Land Survey (PLSS):
+  Township: "T.5N., R.3E." or "T5N R3E" — these are LANDMARK values, do NOT filter
+  Section: "Sec. 14", "S14" — classify as LANDMARK
+  1/4 section: NE¼ SW¼ Sec.14
+
+OCR ERRORS COMMON ON USGS TOPO:
+  period confusion  ("Mt." → "Mt", "BM." → "BM")
+  elevation numbers  ("El. 3456" — these are spot heights, classify correctly)
+  contour numbers    standalone numbers like "5000", "5200" are contour labels — classify as NOISE
+  overprint colors   blue text (water) and green text (vegetation) OCR poorly → common misreads
+
+NOISE SPECIFIC TO USGS:
+  "Compiled from...", "Mapped by...", "Edited by..."
+  "Scale 1:24,000", "Contour Interval ... Feet/Meters"
+  "North American Datum of 1927/1983 (NAD 27/NAD 83)"
+  UTM grid lines and zone labels: "14" "15" (UTM zone numbers)
+  State Plane Coordinate grid labels
+  "PROVISIONAL EDITION", "PHOTOREVISED", "PHOTO-INSPECTED"
