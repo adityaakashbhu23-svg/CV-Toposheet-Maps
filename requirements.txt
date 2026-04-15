@@ -1,6 +1,9 @@
 # CV-Toposheet dependencies
 # Install with: pip install -r requirements.txt
 
+# Web interface
+flask>=3.0.0
+
 # Environment / config
 python-dotenv>=1.0.0
 
