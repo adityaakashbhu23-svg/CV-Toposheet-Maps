@@ -84,7 +84,7 @@ def phase1_tile(new_maps: list) -> dict:
         img  = load_image(str(map_path))
         info = get_image_info(img)
         total = tile_count(img, config.TILE_SIZE, config.TILE_OVERLAP)
-        print(f'       Size: {info["width"]}x{info["height"]}px → {total} tiles')
+        print(f'       Size: {info["width"]}x{info["height"]}px -> {total} tiles')
 
         manifest[map_name] = {
             'file':   str(map_path),

@@ -93,6 +93,17 @@ def _write_env(data: dict):
     ENV_FILE.write_text('\n'.join(new_lines) + '\n', encoding='utf-8')
 
 
+# ── Model → env-var overrides ────────────────────────────────────────────────
+_MODEL_ENVS = {
+    'best':     {'LLM_PROVIDER': 'vertex',  'OCR_ENGINE': 'gcv'},
+    'fast':     {'LLM_PROVIDER': 'groq',    'OCR_ENGINE': 'gcv'},
+    'offline':  {'LLM_PROVIDER': 'groq',    'OCR_ENGINE': 'easyocr'},
+    'openai':   {'LLM_PROVIDER': 'openai',  'OCR_ENGINE': 'gcv'},
+    'claude':   {'LLM_PROVIDER': 'claude',  'OCR_ENGINE': 'gcv'},
+    'grok':     {'LLM_PROVIDER': 'grok',    'OCR_ENGINE': 'gcv'},
+    'ensemble': {'LLM_PROVIDER': 'groq',    'OCR_ENGINE': 'gcv', 'ENSEMBLE_MODE': 'true'},
+}
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 _SETTINGS_KEYS = [
     'GROQ_API_KEY', 'GEMINI_API_KEY', 'GEMINI_API_KEY_2',
@@ -476,14 +487,15 @@ body {{ height:100vh; overflow:hidden;
   text-transform:uppercase; letter-spacing:.08em; margin-bottom:4px;
   flex-shrink:0;
 }}
-.model-cards {{ display:flex; flex-direction:column; gap:8px; margin-bottom:10px; flex-shrink:0; }}
+.model-cards {{ display:flex; flex-direction:column; gap:5px; margin-bottom:8px; flex:1; overflow-y:auto; min-height:0; padding-right:2px; }}
 .model-card {{
   border:2px solid #ccdde3;
-  border-radius:10px; padding:10px 14px;
+  border-radius:10px; padding:7px 12px;
   cursor:pointer; transition:all .2s;
-  display:flex; align-items:center; gap:12px;
+  display:flex; align-items:center; gap:10px;
   background:#fff;
   box-shadow:0 1px 4px rgba(14,116,144,.07);
+  flex-shrink:0;
 }}
 .model-card:hover {{
   border-color:#0e7490;
@@ -493,11 +505,11 @@ body {{ height:100vh; overflow:hidden;
 .model-card input[type=radio] {{ accent-color:#0e7490; margin:0; flex-shrink:0; width:16px; height:16px; }}
 .mc-body {{ flex:1; }}
 .mc-body .mc-name {{
-  font-size:0.84em; font-weight:700; color:#1e3a4a;
-  display:flex; align-items:center; gap:6px;
+  font-size:0.82em; font-weight:700; color:#1e3a4a;
+  display:flex; align-items:center; gap:6px; flex-wrap:wrap;
 }}
 .mc-body .mc-desc {{
-  font-size:0.69em; color:#6b8a99; margin-top:3px; line-height:1.4;
+  font-size:0.67em; color:#6b8a99; margin-top:2px; line-height:1.3;
 }}
 .mc-badge {{
   font-size:0.60em; font-weight:700; letter-spacing:.05em;
@@ -515,7 +527,7 @@ body {{ height:100vh; overflow:hidden;
 }}
 
 /* Divider */
-.divider {{ flex:1; min-height:4px; max-height:14px; }}
+.divider {{ flex-shrink:0; min-height:4px; max-height:8px; }}
 
 /* Info strip */
 .info-strip {{
@@ -596,39 +608,94 @@ body {{ height:100vh; overflow:hidden;
     <div class="model-label">Choose Model</div>
     <div class="model-cards">
 
+      <!-- 1. Ensemble — premium top pick -->
+      <label class="model-card" id="card-ensemble">
+        <input type="radio" name="model_ui" value="ensemble"
+               onchange="selectModel('ensemble')">
+        <div class="mc-body">
+          <div class="mc-name">
+            All 3 LLMs Together
+            <span class="mc-badge" style="background:linear-gradient(90deg,#10a37f,#c96442,#1a1a1a);color:#fff">PREMIUM</span>
+          </div>
+          <div class="mc-desc">OpenAI + Claude + Grok in parallel<br>Majority vote, highest accuracy, uses all 3 APIs</div>
+        </div>
+      </label>
+
+      <!-- 2. Best Quality — Google Cloud -->
       <label class="model-card selected" id="card-best">
         <input type="radio" name="model_ui" value="best" checked
                onchange="selectModel('best')">
         <div class="mc-body">
           <div class="mc-name">
-            Best Quality
+            Vertex AI Gemini
             <span class="mc-badge badge-best">RECOMMENDED</span>
           </div>
-          <div class="mc-desc">GCV OCR + Vertex AI Gemini 2.5 Flash<br>Highest accuracy, uses Google Cloud</div>
+          <div class="mc-desc">GCV OCR + Vertex AI Gemini 2.5 Flash<br>High accuracy, uses Google Cloud</div>
         </div>
       </label>
 
+      <!-- 3. OpenAI -->
+      <label class="model-card" id="card-openai">
+        <input type="radio" name="model_ui" value="openai"
+               onchange="selectModel('openai')">
+        <div class="mc-body">
+          <div class="mc-name">
+            OpenAI GPT-4o
+            <span class="mc-badge" style="background:#10a37f;color:#fff">OPENAI</span>
+          </div>
+          <div class="mc-desc">GCV OCR + GPT-4o-mini<br>Reliable, paid OpenAI API</div>
+        </div>
+      </label>
+
+      <!-- 4. Claude -->
+      <label class="model-card" id="card-claude">
+        <input type="radio" name="model_ui" value="claude"
+               onchange="selectModel('claude')">
+        <div class="mc-body">
+          <div class="mc-name">
+            Claude Haiku
+            <span class="mc-badge" style="background:#c96442;color:#fff">CLAUDE</span>
+          </div>
+          <div class="mc-desc">GCV OCR + Claude 3.5 Haiku<br>Strong reasoning, Anthropic API</div>
+        </div>
+      </label>
+
+      <!-- 5. Grok -->
+      <label class="model-card" id="card-grok">
+        <input type="radio" name="model_ui" value="grok"
+               onchange="selectModel('grok')">
+        <div class="mc-body">
+          <div class="mc-name">
+            Grok (xAI)
+            <span class="mc-badge" style="background:#1a1a1a;color:#fff">GROK</span>
+          </div>
+          <div class="mc-desc">GCV OCR + Grok-3-mini<br>Fast inference, xAI API</div>
+        </div>
+      </label>
+
+      <!-- 6. Fast / Groq -->
       <label class="model-card" id="card-fast">
         <input type="radio" name="model_ui" value="fast"
                onchange="selectModel('fast')">
         <div class="mc-body">
           <div class="mc-name">
-            Fast
+            Groq LLaMA
             <span class="mc-badge badge-fast">QUICK</span>
           </div>
-          <div class="mc-desc">GCV OCR + Groq LLaMA 3.1<br>Faster processing, lower cost</div>
+          <div class="mc-desc">GCV OCR + Groq LLaMA 3.1<br>Fastest processing, low cost</div>
         </div>
       </label>
 
+      <!-- 7. Offline -->
       <label class="model-card" id="card-offline">
         <input type="radio" name="model_ui" value="offline"
                onchange="selectModel('offline')">
         <div class="mc-body">
           <div class="mc-name">
             Offline OCR
-            <span class="mc-badge badge-offline">NO GOOGLE</span>
+            <span class="mc-badge badge-offline">NO CLOUD</span>
           </div>
-          <div class="mc-desc">EasyOCR + Groq LLaMA 3.1<br>No Google Cloud needed</div>
+          <div class="mc-desc">EasyOCR + Groq LLaMA 3.1<br>No internet or Google Cloud needed</div>
         </div>
       </label>
 
@@ -661,19 +728,29 @@ const preview    = document.getElementById('preview');
 const btnSub     = document.getElementById('btnSub');
 
 const modelInfo = {{
-  best:    'Best Quality: Uses Google Cloud Vision for OCR and Vertex AI Gemini for feature extraction. Requires internet & GCP credentials.',
-  fast:    'Fast: Uses Google Cloud Vision OCR with Groq LLaMA for quicker, lower-cost processing.',
-  offline: 'Offline OCR: Uses EasyOCR locally so no Google Cloud needed. First run downloads model files.',
+  ensemble: 'All 3 LLMs Together: Runs OpenAI, Claude and Grok simultaneously in parallel. Each label decided by majority vote, highest possible accuracy, uses all three paid APIs at once.',
+  best:     'Vertex AI Gemini: Uses Google Cloud Vision OCR with Vertex AI Gemini 2.5 Flash. Highest accuracy for Google Cloud users. Requires GCP credentials.',
+  openai:   'OpenAI GPT-4o: Uses Google Cloud Vision OCR with GPT-4o-mini. Reliable results with the OpenAI API.',
+  claude:   'Claude Haiku: Uses Google Cloud Vision OCR with Claude 3.5 Haiku. Strong reasoning via the Anthropic API.',
+  grok:     'Grok (xAI): Uses Google Cloud Vision OCR with Grok-3-mini. Fast inference via the xAI API.',
+  fast:     'Groq LLaMA: Uses Google Cloud Vision OCR with Groq LLaMA 3.1. Fastest processing at the lowest cost.',
+  offline:  'Offline OCR: Uses EasyOCR locally with Groq LLaMA. No internet or Google Cloud account needed. First run downloads model files.',
+}};
+
+const MODEL_LABELS = {{
+  best: 'Best Quality', fast: 'Fast', offline: 'Offline OCR',
+  openai: 'OpenAI GPT', claude: 'Claude (Anthropic)', grok: 'Grok (xAI)',
+  ensemble: 'All 3 LLMs Together',
 }};
 
 function selectModel(val) {{
   modelInput.value = val;
-  ['best','fast','offline'].forEach(m => {{
+  ['best','fast','offline','openai','claude','grok','ensemble'].forEach(m => {{
     document.getElementById('card-' + m).classList.toggle('selected', m === val);
   }});
   document.getElementById('infoStrip').innerHTML =
-    '<b>' + (val === 'best' ? 'Best Quality' : val === 'fast' ? 'Fast' : 'Offline OCR') + ':</b> '
-    + modelInfo[val].split(':')[1];
+    '<b>' + (MODEL_LABELS[val] || val) + ':</b> '
+    + modelInfo[val].split(':').slice(1).join(':');
 }}
 
 function showPreviews(files) {{
@@ -957,7 +1034,7 @@ body {{ font-family:'Segoe UI',Arial,sans-serif; background:#f0f2f5;
 
 <div class="hdr">
   <div class="hdr-title">CV-Toposheet / Maps</div>
-  <div class="hdr-sub">Pipeline running — please keep this tab open</div>
+  <div class="hdr-sub">Pipeline running, please keep this tab open</div>
 </div>
 
 <div class="page">

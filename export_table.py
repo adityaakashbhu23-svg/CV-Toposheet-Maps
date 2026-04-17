@@ -535,6 +535,26 @@ onToggle();
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+def ensure_features_table():
+    """
+    Ensure the 'features' table exists in the database. Creates it if missing.
+    """
+    conn = sqlite3.connect(str(DB_PATH))
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS features (
+            feature_name TEXT,
+            original_text TEXT,
+            grid_reference TEXT,
+            map_name TEXT,
+            feature_type TEXT,
+            confidence REAL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+# Call this at the start of main()
 def main():
     map_filter  = sys.argv[1] if len(sys.argv) > 1 else ''
     type_filter = sys.argv[2] if len(sys.argv) > 2 else ''
