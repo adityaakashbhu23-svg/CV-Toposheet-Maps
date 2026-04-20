@@ -27,3 +27,6 @@ pandas>=2.0.0
 
 # Progress bars
 tqdm>=4.66.0
+
+# CPU monitoring + thermal throttle (cross-platform)
+psutil>=5.9.0

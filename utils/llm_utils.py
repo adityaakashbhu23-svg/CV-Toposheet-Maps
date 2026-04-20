@@ -269,7 +269,7 @@ def clean_with_gemini(
     raw_texts: List[str],
     api_key: str,
     model: str = 'gemini-2.5-flash',
-    batch_size: int = 80
+    batch_size: int = 100
 ) -> List[Dict]:
     """
     Send raw OCR texts to Google Gemini for cleaning and classification.
@@ -578,7 +578,7 @@ def clean_with_vertex(
     project: str,
     location: str = 'us-central1',
     model: str = 'gemini-2.5-flash',
-    batch_size: int = 80
+    batch_size: int = 150
 ) -> List[Dict]:
     """
     Send raw OCR texts to Vertex AI Gemini for cleaning and classification.
@@ -602,7 +602,7 @@ def clean_with_vertex(
         batch = raw_texts[start:start + batch_size]
         batch_num = start // batch_size + 1
         if start > 0:
-            time.sleep(1)  # Vertex AI has higher limits, 1s gap is fine
+            time.sleep(0.5)  # Vertex AI has higher limits, 0.5s gap is fine
 
         for attempt in range(3):
             try:
@@ -682,6 +682,15 @@ def clean_with_llm(raw_texts: List[str]) -> List[Dict]:
     import config
     if not raw_texts:
         return []
+
+    # ── Ensemble mode: run all configured LLMs in parallel and vote ───────────
+    if getattr(config, 'ENSEMBLE_MODE', False):
+        from utils.cpu_utils import throttler as _throttler
+        # Use env-capped value, but never exceed what the CPU can handle right now
+        cfg_workers = getattr(config, 'LLM_ENSEMBLE_WORKERS', _throttler.max_workers)
+        workers = min(cfg_workers, _throttler.workers)
+        print(f'[LLM] ENSEMBLE MODE — running all configured LLMs in parallel (workers={workers}  {_throttler.status()})')
+        return clean_with_ensemble(raw_texts, max_workers=workers)
 
     provider = config.LLM_PROVIDER
     print(f'[LLM] Using provider: {provider.upper()}  ({len(raw_texts)} items)')

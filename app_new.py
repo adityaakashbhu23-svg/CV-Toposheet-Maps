@@ -28,13 +28,13 @@ ALLOWED_EXT = {'.jpg', '.jpeg', '.png', '.tif', '.tiff'}
 _process_lock = threading.Lock()
 
 _MODEL_ENVS = {
-    'best':     {'LLM_PROVIDER': 'vertex',  'OCR_ENGINE': 'gcv'},
-    'fast':     {'LLM_PROVIDER': 'groq',    'OCR_ENGINE': 'gcv'},
-    'ensemble': {'LLM_PROVIDER': 'vertex',  'OCR_ENGINE': 'gcv',  'ENSEMBLE_MODE': 'true'},
-    'openai':   {'LLM_PROVIDER': 'openai',  'OCR_ENGINE': 'gcv'},
     'claude':   {'LLM_PROVIDER': 'claude',  'OCR_ENGINE': 'gcv'},
     'grok':     {'LLM_PROVIDER': 'grok',    'OCR_ENGINE': 'gcv'},
-    'offline':  {'LLM_PROVIDER': 'groq',    'OCR_ENGINE': 'easyocr', 'OCR_WORKERS': '1'},
+    'ensemble': {'LLM_PROVIDER': 'groq',    'OCR_ENGINE': 'gcv', 'ENSEMBLE_MODE': 'true'},
+    'best':     {'LLM_PROVIDER': 'gemini',  'OCR_ENGINE': 'gcv'},
+    'openai':   {'LLM_PROVIDER': 'openai',  'OCR_ENGINE': 'gcv'},
+    'fast':     {'LLM_PROVIDER': 'groq',    'OCR_ENGINE': 'gcv'},
+    'offline':  {'LLM_PROVIDER': 'groq',    'OCR_ENGINE': 'easyocr'},
 }
 
 app = Flask(__name__)
@@ -135,8 +135,59 @@ def upload():
     if not saved_names:
         return redirect('/')
 
-    combined = ','.join(saved_names)
-    return redirect(f'/process/{url_quote(combined, safe="")}?model={url_quote(model, safe="")}&session={url_quote(session_id, safe="")}')
+    env_overrides = _MODEL_ENVS.get(model, _MODEL_ENVS['best'])
+
+    def generate():
+        if not _process_lock.acquire(blocking=False):
+            yield f'data: {json.dumps({"msg": "Another map is already being processed. Please wait and try again."})}\n\n'
+            yield f'data: {json.dumps({"error": True})}\n\n'
+            return
+
+        try:
+            env = os.environ.copy()
+            env.update(env_overrides)
+
+            session_maps_dir    = str(BASE_DIR / 'maps'    / session_id)
+            session_results_dir = str(BASE_DIR / 'results' / session_id)
+            session_logs_dir    = str(BASE_DIR / 'logs'    / session_id)
+            Path(session_maps_dir).mkdir(parents=True, exist_ok=True)
+            Path(session_results_dir).mkdir(parents=True, exist_ok=True)
+            Path(session_logs_dir).mkdir(parents=True, exist_ok=True)
+            env['MAPS_FOLDER']    = session_maps_dir
+            env['RESULTS_FOLDER'] = session_results_dir
+            env['LOGS_FOLDER']    = session_logs_dir
+            results_url = f'/results/{session_id}'
+
+            for label, script in [('pipeline', 'process_new_maps.py'),
+                                   ('export',   'export_table.py')]:
+                if label == 'export':
+                    yield f'data: {json.dumps({"msg": "Exporting results table..."})}\n\n'
+
+                proc = subprocess.Popen(
+                    [sys.executable, script],
+                    cwd=str(BASE_DIR),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    env=env,
+                )
+                for line in iter(proc.stdout.readline, ''):
+                    line = line.rstrip()
+                    if line:
+                        yield f'data: {json.dumps({"msg": line})}\n\n'
+                proc.wait()
+
+            yield f'data: {json.dumps({"done": True, "redirect": results_url, "msg": "Done! Click View Results."})}\n\n'
+
+        finally:
+            _process_lock.release()
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
 
 
 @app.route('/stream/<path:filename>')
@@ -151,54 +202,7 @@ def stream(filename):
 
 
 def _stream_gen(filename, model, session_id):
-    env_overrides = _MODEL_ENVS.get(model, _MODEL_ENVS['best'])
-
-    if not _process_lock.acquire(blocking=False):
-        yield f'data: {json.dumps({"msg": "Another map is already being processed. Please wait and try again."})}\n\n'
-        yield f'data: {json.dumps({"error": True})}\n\n'
-        return
-
-    try:
-        env = os.environ.copy()
-        env.update(env_overrides)
-
-        session_maps_dir    = str(BASE_DIR / 'maps'    / session_id)
-        session_results_dir = str(BASE_DIR / 'results' / session_id)
-        session_logs_dir    = str(BASE_DIR / 'logs'    / session_id)
-        Path(session_maps_dir).mkdir(parents=True, exist_ok=True)
-        Path(session_results_dir).mkdir(parents=True, exist_ok=True)
-        Path(session_logs_dir).mkdir(parents=True, exist_ok=True)
-        env['MAPS_FOLDER']    = session_maps_dir
-        env['RESULTS_FOLDER'] = session_results_dir
-        env['LOGS_FOLDER']    = session_logs_dir
-        results_url = f'/results/{session_id}'
-
-        yield f'data: {json.dumps({"msg": f"Starting processing for {filename}..."})}\n\n'
-
-        for label, script in [('pipeline', 'process_new_maps.py'),
-                               ('export',   'export_table.py')]:
-            if label == 'export':
-                yield f'data: {json.dumps({"msg": "Exporting results table..."})}\n\n'
-
-            proc = subprocess.Popen(
-                [sys.executable, script],
-                cwd=str(BASE_DIR),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                env=env,
-            )
-            for line in iter(proc.stdout.readline, ''):
-                line = line.rstrip()
-                if line:
-                    yield f'data: {json.dumps({"msg": line})}\n\n'
-            proc.wait()
-
-        yield f'data: {json.dumps({"done": True, "redirect": results_url, "msg": "Done! Click View Results."})}\n\n'
-
-    finally:
-        _process_lock.release()
+    yield f'data: {json.dumps({"msg": f"Starting processing for {filename}..."})}\n\n'
 
 
 @app.route('/process/<path:filename>')
@@ -221,26 +225,8 @@ def get_env():
 def results(session_id=None):
     if session_id:
         out = BASE_DIR / 'results' / session_id / 'table_export.html'
-        res_dir = str(BASE_DIR / 'results' / session_id)
     else:
         out = RESULTS_DIR / 'table_export.html'
-        res_dir = str(RESULTS_DIR)
-
-    # If HTML not yet generated, try to generate it on-demand from the DB
-    if not out.exists():
-        db_path = Path(res_dir) / 'toposheet.db'
-        if db_path.exists() and db_path.stat().st_size > 0:
-            try:
-                env = os.environ.copy()
-                env['RESULTS_FOLDER'] = res_dir
-                subprocess.run(
-                    [sys.executable, 'export_table.py'],
-                    cwd=str(BASE_DIR), env=env,
-                    timeout=60, capture_output=True
-                )
-            except Exception:
-                pass
-
     if out.exists():
         return send_file(str(out))
     return ('<h2 style="font-family:sans-serif;padding:40px;color:#888">'
@@ -264,7 +250,7 @@ _LANDING_TEMPLATE = """<!DOCTYPE html>
 <title>CV-Toposheet - Map Digitization</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
-body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; background:#f0f4f8; display:flex; flex-direction:column; overflow:hidden; }
+body { min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; background:#f0f4f8; display:flex; flex-direction:column; }
 .hdr { display:flex;align-items:center;justify-content:space-between;background:#0E7490;padding:14px 28px;flex-shrink:0; }
 .hdr-logo { font-size:1.25em; font-weight:700; color:#fff; letter-spacing:-.01em; }
 .hdr-logo span { color:#fff; }
@@ -272,52 +258,44 @@ body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; backg
 .hdr-actions { display:flex; align-items:center; gap:10px; }
 .settings-btn { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); color:#fff; border-radius:7px; padding:7px 14px; font-size:0.85em; cursor:pointer; transition:background .2s; }
 .settings-btn:hover { background:rgba(255,255,255,.25); }
-#uploadForm { flex:1; display:flex; flex-direction:column; min-height:0; }
-.body { flex:1; display:flex; flex-direction:row; gap:16px; align-items:stretch; justify-content:stretch; padding:10px 8px; min-height:0; }
-.left { flex:1; min-width:280px; display:flex; flex-direction:column; }
-.right { width:440px; min-width:380px; max-width:520px; display:flex; flex-direction:column; padding:8px 12px; gap:0; background:#fff; border:2px solid #93c5d4; border-radius:14px; box-shadow:0 2px 16px rgba(14,116,144,.08); }
-.right-title { font-size:0.55em; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#0E7490; margin-bottom:4px; padding-bottom:3px; border-bottom:1.5px solid #e0f2f7; flex-shrink:0; }
+.body { flex:1; display:flex; flex-direction:row; gap:32px; align-items:flex-start; justify-content:center; padding:38px 28px 0 28px; min-height:400px; }
+.left { width:420px; min-width:320px; max-width:480px; }
+.right { flex:1; display:flex; flex-direction:column; padding:18px; gap:0; background:#fff; border:2.5px solid #93c5d4; border-radius:20px; min-height:400px; box-shadow:0 2px 20px rgba(14,116,144,.08); overflow:auto; }
+.right-title { font-size:0.63em; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#0E7490; margin-bottom:8px; padding-bottom:6px; border-bottom:2px solid #e0f2f7; flex-shrink:0; }
 .model-label { font-size:0.63em; font-weight:600; color:#6b8a99; text-transform:uppercase; letter-spacing:.08em; margin-bottom:4px; flex-shrink:0; }
-.model-cards { display:flex; flex-direction:column; gap:1px; margin-bottom:4px; flex:1; overflow-y:auto; min-height:0; padding-right:3px; scrollbar-width:thin; scrollbar-color:#93c5d4 #f0f4f8; }
-.model-cards::-webkit-scrollbar { width:6px; }
-.model-cards::-webkit-scrollbar-track { background:#f0f4f8; border-radius:3px; }
-.model-cards::-webkit-scrollbar-thumb { background:#93c5d4; border-radius:3px; }
-.model-cards::-webkit-scrollbar-thumb:hover { background:#0e7490; }
-.model-card { border:1.5px solid #ccdde3; border-radius:6px; padding:3px 7px; cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:6px; background:#fff; box-shadow:0 1px 2px rgba(14,116,144,.05); flex-shrink:0; }
+.model-cards { display:flex; flex-direction:column; gap:5px; margin-bottom:8px; flex:1; overflow-y:auto; min-height:0; padding-right:2px; }
+.model-card { border:2px solid #ccdde3; border-radius:10px; padding:7px 12px; cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:10px; background:#fff; box-shadow:0 1px 4px rgba(14,116,144,.07); flex-shrink:0; }
 .model-card:hover { border-color:#0e7490; background:#f0f9fb; box-shadow:0 2px 10px rgba(14,116,144,.15); }
-.model-card input[type=radio] { accent-color:#0e7490; margin:0; flex-shrink:0; width:13px; height:13px; }
+.model-card input[type=radio] { accent-color:#0e7490; margin:0; flex-shrink:0; width:16px; height:16px; }
 .mc-body { flex:1; }
-.mc-body .mc-name { font-size:0.68em; font-weight:700; color:#1e3a4a; display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
-.mc-body .mc-desc { font-size:0.55em; color:#6b8a99; margin-top:0px; line-height:1.2; }
-.badge { display:inline-block; border-radius:3px; padding:0px 4px; font-size:0.58em; font-weight:700; }
+.mc-body .mc-name { font-size:0.82em; font-weight:700; color:#1e3a4a; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.mc-body .mc-desc { font-size:0.67em; color:#6b8a99; margin-top:2px; line-height:1.3; }
+.badge { display:inline-block; border-radius:4px; padding:1px 7px; font-size:0.7em; font-weight:700; }
 .badge-best    { background:#d0f0f7; color:#0e7490; }
 .badge-fast    { background:#fef9c3; color:#a16207; }
 .badge-offline { background:#ede9fe; color:#6d28d9; }
-.model-card.selected { border-color:#0e7490; border-width:1.5px; background:#e8f5f9; box-shadow:0 0 0 2px rgba(14,116,144,.10); }
+.model-card.selected { border-color:#0e7490; border-width:2px; background:#e8f5f9; box-shadow:0 0 0 3px rgba(14,116,144,.12); }
 .divider { flex-shrink:0; min-height:4px; max-height:8px; }
-.info-strip { background:#f0f9fb; border-radius:5px; border:1px solid #b8dde8; padding:3px 7px; margin-top:4px; flex-shrink:0; font-size:0.54em; color:#4a7080; line-height:1.3; }
+.info-strip { background:#f0f9fb; border-radius:7px; border:1px solid #b8dde8; padding:6px 10px; margin-bottom:8px; flex-shrink:0; font-size:0.67em; color:#4a7080; line-height:1.45; }
 .info-strip b { color:#0E7490; }
-.process-btn { width:100%; padding:7px; background:linear-gradient(135deg,#0e7490,#0891b2); color:white; border:none; border-radius:7px; font-size:0.8em; font-weight:700; cursor:pointer; transition:all .2s; box-shadow:0 2px 8px rgba(14,116,144,.3); letter-spacing:.01em; flex-shrink:0; }
+.process-btn { width:100%; padding:11px; background:linear-gradient(135deg,#0e7490,#0891b2); color:white; border:none; border-radius:8px; font-size:0.92em; font-weight:700; cursor:pointer; transition:all .2s; box-shadow:0 3px 12px rgba(14,116,144,.3); letter-spacing:.01em; flex-shrink:0; }
 .process-btn:hover { background:linear-gradient(135deg,#0891b2,#06b6d4); box-shadow:0 5px 22px rgba(14,116,144,.55); transform:translateY(-1px); }
 .process-btn:disabled { background:#dde8ec; color:#7a9daa; cursor:not-allowed; box-shadow:none; transform:none; }
 .process-btn .btn-sub { display:block; font-size:0.68em; font-weight:400; color:rgba(255,255,255,.70); margin-top:2px; }
-.drop-zone { position:relative; border:2px dashed #93c5d4; border-radius:14px; background:#fff; flex:1; min-height:180px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px 16px 16px 16px; transition:border .18s,background .18s; cursor:pointer; overflow:visible; }
+.drop-zone { position:relative; border:2.5px dashed #93c5d4; border-radius:18px; background:#fff; min-height:220px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px 18px 18px 18px; margin-bottom:18px; transition:border .18s,background .18s; cursor:pointer; }
 .drop-zone.drag-over { border-color:#0e7490; background:#f6fdff; box-shadow:0 4px 32px rgba(14,116,144,.18); }
-.dz-icon-row { display:flex; align-items:center; justify-content:center; gap:28px; margin-bottom:10px; }
-.dz-icon-side { font-size:6em; line-height:1; }
-.dz-icon { font-size:6.5em; line-height:1; }
-.dz-icon-world { font-size:6.5em; line-height:1; filter:grayscale(1) brightness(0.6); -webkit-filter:grayscale(1) brightness(0.6); opacity:0.55; }
-.dz-title { font-size:1.05em; font-weight:700; color:#1e3a4a; margin-top:4px; text-align:center; }
-.dz-sub   { font-size:0.75em; color:#6b8a99; text-align:center; }
+.drop-zone input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+.dz-icon-row { display:flex; align-items:center; justify-content:center; gap:20px; margin-bottom:4px; }
+.dz-icon-side { font-size:2.8em; opacity:.65; line-height:1; }
+.dz-icon { font-size:3.2em; opacity:.65; line-height:1; }
+.dz-title { font-size:1.25em; font-weight:700; color:#1e3a4a; margin-top:4px; text-align:center; }
+.dz-sub   { font-size:0.82em; color:#6b8a99; text-align:center; }
 .dz-badge { background:#e0f2f7; border:1px solid #93c5d4; border-radius:20px; padding:5px 16px; font-size:0.75em; color:#0e7490; letter-spacing:.06em; margin-top:6px; display:inline-block; white-space:nowrap; }
-#preview { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; max-width:580px; margin-top:10px; padding:4px 8px 4px 8px; position:relative; z-index:10; pointer-events:auto; }
-.prev-thumb { width:72px; height:72px; object-fit:cover; border-radius:6px; border:2px solid #93c5d4; box-shadow:0 2px 8px rgba(0,0,0,.15); display:block; }
-.prev-name { font-size:0.68em; color:#0e7490; text-align:center; max-width:72px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.prev-item { display:flex; flex-direction:column; align-items:center; gap:3px; position:relative; cursor:default; }
-.prev-remove { position:absolute; top:3px; right:3px; width:22px; height:22px; border-radius:50%; background:rgba(220,38,38,0.92); color:#fff; border:2px solid #fff; font-size:13px; line-height:1; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 1px 5px rgba(0,0,0,.4); z-index:20; font-weight:900; opacity:0; transition:opacity .15s; pointer-events:auto; }
-.prev-item:hover .prev-remove { opacity:1; }
-.drop-zone input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; z-index:5; }
-@media (max-width:1100px) { .body { flex-direction:column; align-items:center; gap:18px; padding:18px 8px; } .left, .right { width:100%; max-width:700px; min-width:0; } }
+#preview { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; max-width:580px; margin-top:8px; padding:0 8px; }
+.prev-thumb { width:64px; height:64px; object-fit:cover; border-radius:6px; border:2px solid #93c5d4; box-shadow:0 2px 8px rgba(0,0,0,.15); }
+.prev-name { font-size:0.68em; color:#0e7490; text-align:center; max-width:64px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.prev-item { display:flex; flex-direction:column; align-items:center; gap:3px; }
+@media (max-width:1100px) { .body { flex-direction:column; align-items:center; gap:18px; } .left, .right { width:100%; max-width:600px; } }
 /* Settings Modal */
 .key-section { border:1px solid #e0e7ef; border-radius:8px; margin-bottom:12px; background:#f8fafc; }
 .key-section-title { font-weight:700; font-size:0.92em; padding:8px 12px; background:#e0f2f7; border-radius:8px 8px 0 0; cursor:pointer; user-select:none; display:flex; align-items:center; justify-content:space-between; }
@@ -342,11 +320,6 @@ body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; backg
 .btn-cancel { background:#e0e7ef; color:#0E7490; border:none; border-radius:6px; padding:8px 18px; font-size:0.95em; font-weight:700; cursor:pointer; }
 .btn-save { background:#0E7490; color:#fff; border:none; border-radius:6px; padding:8px 18px; font-size:0.95em; font-weight:700; cursor:pointer; }
 .show-all-btn { background:none; border:none; color:#0E7490; font-weight:700; cursor:pointer; font-size:0.85em; margin-bottom:10px; text-decoration:underline; }
-.badge-premium { background:#fef3c7; color:#92400e; }
-.badge-optional { background:#f0fdf4; color:#166534; }
-.badge-claude  { background:#fae8ff; color:#86198f; }
-.badge-grok    { background:#fff7ed; color:#c2410c; }
-@media print { .modal-overlay, .hdr-actions { display:none !important; } }
 </style>
 </head>
 <body>
@@ -354,172 +327,101 @@ body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; backg
 <div class="hdr">
   <div>
     <div class="hdr-logo">CV-<span>Toposheet</span></div>
-    <div class="hdr-sub">Extracted Map Features</div>
+    <div class="hdr-sub">Topographic Map Digitization</div>
   </div>
   <div class="hdr-actions">
-    <button class="settings-btn" onclick="openSettings()">&#9881;&#xFE0E; Settings</button>
+    <button class="settings-btn" onclick="openSettings()">&#9881; API Keys</button>
   </div>
 </div>
 
-<form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
 <div class="body">
   <div class="left">
+    <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
       <div class="drop-zone" id="dropZone">
         <input type="file" name="map_file" id="fileInput" accept=".jpg,.jpeg,.png,.tif,.tiff" multiple>
         <div class="dz-icon-row">
-          <!-- Icon 1: Colourful topographic mountain map -->
-          <span class="dz-icon-side"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 72 72" style="display:inline-block;vertical-align:middle">
-            <rect x="4" y="4" width="64" height="64" rx="7" fill="#fffde7" stroke="#f59e0b" stroke-width="2.5"/>
-            <!-- sky gradient band -->
-            <rect x="5" y="5" width="62" height="28" rx="6" fill="#bfecfd"/>
-            <!-- green ground -->
-            <rect x="5" y="45" width="62" height="22" rx="0" fill="#a7d994"/>
-            <rect x="5" y="55" width="62" height="12" rx="0" fill="#86c96e"/>
-            <!-- main mountain -->
-            <polygon points="36,12 58,48 14,48" fill="#8fae6b" stroke="#4a7c30" stroke-width="1.8" stroke-linejoin="round"/>
-            <!-- mountain shadow side -->
-            <polygon points="36,12 58,48 36,48" fill="#7a9c58" stroke="none"/>
-            <!-- snow cap -->
-            <polygon points="36,12 42,26 30,26" fill="#fff" stroke="#cbd5e1" stroke-width="1"/>
-            <!-- contour lines (warm orange) -->
-            <path d="M18,52 Q36,46 54,52" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/>
-            <path d="M10,58 Q36,51 62,58" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/>
-            <path d="M5,64 Q36,57 67,64" fill="none" stroke="#d97706" stroke-width="1.4" stroke-linecap="round"/>
-            <!-- border -->
-            <rect x="4" y="4" width="64" height="64" rx="7" fill="none" stroke="#f59e0b" stroke-width="2.5"/>
-          </svg></span>
-          <!-- Icon 2: Medium grey world map -->
-          <span class="dz-icon-side" style="filter:grayscale(1) brightness(1.1) contrast(0.5);-webkit-filter:grayscale(1) brightness(1.1) contrast(0.5);opacity:0.55;">&#128506;</span>
-          <!-- Icon 3: Colourful AI laptop -->
-          <span class="dz-icon-side"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="0.9em" viewBox="0 0 80 70" style="display:inline-block;vertical-align:middle">
-            <!-- screen frame -->
-            <rect x="8" y="5" width="64" height="42" rx="5" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2.2"/>
-            <!-- screen glow -->
-            <rect x="13" y="10" width="54" height="32" rx="2" fill="#0f172a"/>
-            <!-- subtle screen gradient overlay -->
-            <rect x="13" y="10" width="54" height="16" rx="2" fill="url(#sg)" opacity="0.3"/>
-            <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#60a5fa" stop-opacity="0.5"/><stop offset="1" stop-color="#0f172a" stop-opacity="0"/></linearGradient></defs>
-            <!-- neural net connections -->
-            <line x1="40" y1="26" x2="24" y2="17" stroke="#60a5fa" stroke-width="1.2" opacity="0.9"/>
-            <line x1="40" y1="26" x2="56" y2="17" stroke="#60a5fa" stroke-width="1.2" opacity="0.9"/>
-            <line x1="40" y1="26" x2="24" y2="35" stroke="#60a5fa" stroke-width="1.2" opacity="0.9"/>
-            <line x1="40" y1="26" x2="56" y2="35" stroke="#60a5fa" stroke-width="1.2" opacity="0.9"/>
-            <line x1="40" y1="26" x2="40" y2="14" stroke="#a78bfa" stroke-width="1.2" opacity="0.9"/>
-            <line x1="40" y1="26" x2="40" y2="38" stroke="#a78bfa" stroke-width="1.2" opacity="0.9"/>
-            <line x1="40" y1="26" x2="19" y2="26" stroke="#34d399" stroke-width="1.2" opacity="0.9"/>
-            <line x1="40" y1="26" x2="61" y2="26" stroke="#34d399" stroke-width="1.2" opacity="0.9"/>
-            <!-- outer nodes -->
-            <circle cx="40" cy="14" r="3.2" fill="#a78bfa" stroke="#fff" stroke-width="1"/>
-            <circle cx="40" cy="38" r="3.2" fill="#a78bfa" stroke="#fff" stroke-width="1"/>
-            <circle cx="19" cy="26" r="3.2" fill="#34d399" stroke="#fff" stroke-width="1"/>
-            <circle cx="61" cy="26" r="3.2" fill="#34d399" stroke="#fff" stroke-width="1"/>
-            <circle cx="24" cy="17" r="2.6" fill="#60a5fa" stroke="#fff" stroke-width="0.8"/>
-            <circle cx="56" cy="17" r="2.6" fill="#60a5fa" stroke="#fff" stroke-width="0.8"/>
-            <circle cx="24" cy="35" r="2.6" fill="#60a5fa" stroke="#fff" stroke-width="0.8"/>
-            <circle cx="56" cy="35" r="2.6" fill="#60a5fa" stroke="#fff" stroke-width="0.8"/>
-            <!-- centre node glowing -->
-            <circle cx="40" cy="26" r="6" fill="#f59e0b" stroke="#fff" stroke-width="1.8"/>
-            <circle cx="40" cy="26" r="2.8" fill="#fff"/>
-            <!-- laptop base -->
-            <path d="M4,47 Q40,51 76,47 L72,61 Q40,64 8,61 Z" fill="#3b82f6" stroke="#1e3a5f" stroke-width="1.8"/>
-            <!-- keyboard strip -->
-            <rect x="28" y="53" width="24" height="3.5" rx="1.8" fill="#93c5fd"/>
-            <!-- hinge -->
-            <rect x="34" y="46" width="12" height="3" rx="1.5" fill="#1e3a5f"/>
-          </svg></span>
+          <span class="dz-icon-side">&#128506;</span>
+          <span class="dz-icon">&#128228;</span>
+          <span class="dz-icon-side">&#128205;</span>
         </div>
-        <div class="dz-title">Upload Toposheet</div>
-        <div class="dz-sub">Drag &amp; drop map images here, or click to browse</div>
-        <div class="dz-badge">JPG &middot; PNG &middot; TIF &middot; Up to 500 MB each</div>
+        <div class="dz-title">Drop map image here</div>
+        <div class="dz-sub">or click to browse</div>
+        <div class="dz-badge">JPG &middot; PNG &middot; TIF</div>
         <div id="preview"></div>
       </div>
+
+      <div class="right" style="min-height:unset;margin-bottom:14px;">
+        <div class="right-title">Select AI Model</div>
+        <div class="model-label">Choose extraction engine</div>
+        <div class="model-cards" id="modelCards">
+          <label class="model-card selected" onclick="selectCard(this)">
+            <input type="radio" name="model" value="best" checked>
+            <div class="mc-body">
+              <div class="mc-name">Gemini Pro <span class="badge badge-best">Best</span></div>
+              <div class="mc-desc">Highest accuracy, recommended for production maps</div>
+            </div>
+          </label>
+          <label class="model-card" onclick="selectCard(this)">
+            <input type="radio" name="model" value="fast">
+            <div class="mc-body">
+              <div class="mc-name">Groq <span class="badge badge-fast">Fast</span></div>
+              <div class="mc-desc">Fastest processing, good for quick previews</div>
+            </div>
+          </label>
+          <label class="model-card" onclick="selectCard(this)">
+            <input type="radio" name="model" value="claude">
+            <div class="mc-body">
+              <div class="mc-name">Claude</div>
+              <div class="mc-desc">Anthropic Claude – excellent at structured data</div>
+            </div>
+          </label>
+          <label class="model-card" onclick="selectCard(this)">
+            <input type="radio" name="model" value="openai">
+            <div class="mc-body">
+              <div class="mc-name">OpenAI GPT-4</div>
+              <div class="mc-desc">Strong general-purpose extraction</div>
+            </div>
+          </label>
+          <label class="model-card" onclick="selectCard(this)">
+            <input type="radio" name="model" value="offline">
+            <div class="mc-body">
+              <div class="mc-name">Offline <span class="badge badge-offline">No API</span></div>
+              <div class="mc-desc">EasyOCR + local model, no API keys needed</div>
+            </div>
+          </label>
+        </div>
+        <div class="divider"></div>
+        <div class="info-strip">
+          <b>__FEAT_COUNT__</b> features &middot; <b>__MAP_COUNT__</b> maps processed
+        </div>
+        <button type="submit" class="process-btn" id="processBtn" disabled>
+          &#128202; Digitize Map
+          <span class="btn-sub">Upload a map image to begin</span>
+        </button>
+      </div>
+    </form>
   </div>
 
   <div class="right">
-    <div class="right-title">Choose Model</div>
-    <div class="model-cards" id="modelCards">
-      <label class="model-card selected" onclick="selectCard(this)" data-model="best">
-        <input type="radio" name="model_sel" value="best" checked>
-        <div class="mc-body">
-          <div class="mc-name">1. Best Quality <span class="badge badge-best">RECOMMENDED</span></div>
-          <div class="mc-desc">GCV OCR (parallel) + Vertex AI Gemini 2.5 Flash<br>Highest accuracy &middot; 150 items/batch &middot; GCP service account</div>
-        </div>
-      </label>
-      <label class="model-card" onclick="selectCard(this)" data-model="fast">
-        <input type="radio" name="model_sel" value="fast">
-        <div class="mc-body">
-          <div class="mc-name">2. Fast <span class="badge badge-fast">QUICK</span></div>
-          <div class="mc-desc">GCV OCR (parallel) + Groq LLaMA 3.1 8B<br>Fastest end-to-end &middot; 60 items/batch &middot; free Groq tier</div>
-        </div>
-      </label>
-      <label class="model-card" onclick="selectCard(this)" data-model="ensemble">
-        <input type="radio" name="model_sel" value="ensemble">
-        <div class="mc-body">
-          <div class="mc-name">3. All LLMs Together <span class="badge badge-premium">PREMIUM</span></div>
-          <div class="mc-desc">GCV OCR + all configured LLMs run in parallel<br>Majority vote consensus &middot; highest confidence</div>
-        </div>
-      </label>
-      <label class="model-card" onclick="selectCard(this)" data-model="openai">
-        <input type="radio" name="model_sel" value="openai">
-        <div class="mc-body">
-          <div class="mc-name">4. OpenAI GPT-4o <span class="badge badge-optional">OPTIONAL</span></div>
-          <div class="mc-desc">GCV OCR + GPT-4o-mini<br>Reliable, paid OpenAI API</div>
-        </div>
-      </label>
-      <label class="model-card" onclick="selectCard(this)" data-model="claude">
-        <input type="radio" name="model_sel" value="claude">
-        <div class="mc-body">
-          <div class="mc-name">5. Claude Haiku <span class="badge badge-claude">CLAUDE</span></div>
-          <div class="mc-desc">GCV OCR + Claude 3.5 Haiku<br>Anthropic, Claude API</div>
-        </div>
-      </label>
-      <label class="model-card" onclick="selectCard(this)" data-model="grok">
-        <input type="radio" name="model_sel" value="grok">
-        <div class="mc-body">
-          <div class="mc-name">6. Grok (xAI) <span class="badge badge-grok">GROK</span></div>
-          <div class="mc-desc">GCV OCR + Grok-3-mini<br>Fast inference, xAI API</div>
-        </div>
-      </label>
-      <label class="model-card" onclick="selectCard(this)" data-model="offline">
-        <input type="radio" name="model_sel" value="offline">
-        <div class="mc-body">
-          <div class="mc-name">7. Offline OCR <span class="badge badge-offline">NO GOOGLE</span></div>
-          <div class="mc-desc">EasyOCR + Groq LLaMA 3.1<br>No Google Cloud needed</div>
-        </div>
-      </label>
-      <div class="info-strip" id="modelInfo">
-        <b>Best Quality:</b> Uses Google Cloud Vision for OCR and Vertex AI Gemini for feature extraction. Requires internet &amp; GCP credentials.
-      </div>
+    <div class="right-title">How It Works</div>
+    <p style="font-size:0.82em;color:#4a7080;line-height:1.6;margin-bottom:10px;">
+      <b>1. Upload</b> a topographic map image (JPG, PNG, or TIF).<br>
+      <b>2. Select</b> an AI model for text extraction.<br>
+      <b>3. Click Digitize</b> – the pipeline runs automatically.<br>
+      <b>4. View Results</b> – download the structured data table.
+    </p>
+    <div style="border-top:1px solid #e0f2f7;margin:10px 0;"></div>
+    <div style="font-size:0.75em;color:#6b8a99;line-height:1.6;">
+      Supports Survey of India, UK OS, USGS, and other national grid toposheets.
+      Extracts place names, elevations, grid references, and geographic features.
     </div>
-    <input type="hidden" name="model" id="modelInput" value="best">
-    <button type="submit" class="process-btn" id="processBtn" disabled>
-      &#9654; Process Map
-      <span class="btn-sub">Select a map file to continue</span>
-    </button>
   </div>
 </div>
-</form>
 
 <script>
-const MODEL_INFO = {
-  best:     '<b>Best Quality:</b> Parallel GCV OCR tiles + Vertex AI Gemini 2.5 Flash. Largest batches (150 items), fastest Gemini model. Requires GCP service account.',
-  fast:     '<b>Groq LLaMA (Fast):</b> Parallel GCV OCR + Groq LLaMA 3.1 8B. No inter-batch delays. Fastest total processing time. Free Groq API key needed.',
-  ensemble: '<b>Ensemble (All LLMs):</b> Parallel GCV OCR + ALL your configured LLMs run simultaneously. Results merged by majority vote for maximum confidence. Slowest but most accurate.',
-  openai:   '<b>OpenAI GPT-4o:</b> Parallel GCV OCR + GPT-4o-mini. 80 items/batch. Reliable paid OpenAI API.',
-  claude:   '<b>Claude Haiku:</b> Parallel GCV OCR + Claude 3.5 Haiku. Strong reasoning. Anthropic API key required.',
-  grok:     '<b>Grok (xAI):</b> Parallel GCV OCR + Grok-3-mini. Fast xAI inference. xAI API key required.',
-  offline:  '<b>Offline OCR:</b> EasyOCR (local, no Google Cloud) + Groq LLaMA. Sequential OCR tiles – slower but no GCP needed.',
-};
 function selectCard(el) {
   document.querySelectorAll('.model-card').forEach(c => c.classList.remove('selected'));
   el.classList.add('selected');
-  const val = el.querySelector('input[type=radio]').value;
-  document.getElementById('modelInput').value = val;
-  const infoEl = document.getElementById('modelInfo');
-  if (infoEl && MODEL_INFO[val]) {
-    const counts = infoEl.querySelector('span');
-    infoEl.innerHTML = (MODEL_INFO[val] || '') + (counts ? '<br>' + counts.outerHTML : '');
-  }
 }
 
 const fileInput = document.getElementById('fileInput');
@@ -537,63 +439,25 @@ dropZone.addEventListener('drop', e => {
   showPreviews();
 });
 
-// DataTransfer-based file list so we can remove individual files
-let _fileList = [];   // array of File objects
-
-function _syncInputFiles() {
-  const dt = new DataTransfer();
-  _fileList.forEach(f => dt.items.add(f));
-  fileInput.files = dt.files;
-}
-
-function _renderPreviews() {
+function showPreviews() {
   preview.innerHTML = '';
-  if (!_fileList.length) {
-    processBtn.disabled = true;
-    processBtn.querySelector('.btn-sub').textContent = 'Select a map file to continue';
-    return;
-  }
+  const files = fileInput.files;
+  if (!files.length) { processBtn.disabled = true; return; }
   processBtn.disabled = false;
-  processBtn.querySelector('.btn-sub').textContent = _fileList.length + ' file(s) ready';
-  _fileList.forEach((f, idx) => {
+  processBtn.querySelector('.btn-sub').textContent = files.length + ' file(s) ready';
+  for (const f of files) {
     const item = document.createElement('div');
     item.className = 'prev-item';
-
-    // Remove (×) button
-    const rm = document.createElement('button');
-    rm.type = 'button';
-    rm.className = 'prev-remove';
-    rm.title = 'Remove ' + f.name;
-    rm.textContent = '\u00D7';
-    rm.addEventListener('click', e => {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      _fileList.splice(idx, 1);
-      _syncInputFiles();
-      _renderPreviews();
-    });
-    rm.addEventListener('mouseenter', e => e.stopPropagation());
-    rm.addEventListener('mouseover', e => e.stopPropagation());
-
     const img = document.createElement('img');
     img.className = 'prev-thumb';
     img.src = URL.createObjectURL(f);
-
     const name = document.createElement('div');
     name.className = 'prev-name';
     name.textContent = f.name;
-
-    item.appendChild(rm);
     item.appendChild(img);
     item.appendChild(name);
     preview.appendChild(item);
-  });
-}
-
-function showPreviews() {
-  _fileList = Array.from(fileInput.files);
-  _renderPreviews();
+  }
 }
 
 // Settings modal
@@ -771,42 +635,38 @@ def _process_html(filename: str, model: str = 'best', session_id: str = '') -> s
 <title>Processing &ndash; {filename}</title>
 <style>
 * {{ box-sizing:border-box; margin:0; padding:0; }}
-body {{ height:100vh; overflow:hidden; font-family:'Segoe UI', system-ui, Arial, sans-serif; background:#f0f4f8; display:flex; flex-direction:column; }}
+body {{ min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; background:#f0f4f8; display:flex; flex-direction:column; }}
 .hdr {{ display:flex;align-items:center;justify-content:space-between;background:#0E7490;padding:14px 28px;flex-shrink:0; }}
 .hdr-logo {{ font-size:1.25em; font-weight:700; color:#fff; letter-spacing:-.01em; }}
 .hdr-logo span {{ color:#fff; }}
-.hdr-sub {{ font-size:0.78em; color:rgba(255,255,255,.75); margin-top:2px; }}
-.page {{ flex:1; min-height:0; overflow-y:auto; display:flex; justify-content:center; align-items:stretch; padding:10px 16px; }}
-.card {{ background:#fff; border-radius:16px; box-shadow:0 2px 24px rgba(14,116,144,.12); padding:22px 28px; max-width:680px; width:100%; display:flex; flex-direction:column; }}
-.status-row {{ display:flex; align-items:center; gap:14px; margin-bottom:14px; }}
-.spinner {{ width:28px; height:28px; border:3px solid #e0e0e0; border-top-color:#0E7490; border-radius:50%; animation:spin .8s linear infinite; flex-shrink:0; }}
+.page {{ flex:1; display:flex; justify-content:center; align-items:flex-start; padding:40px 20px; }}
+.card {{ background:#fff; border-radius:14px; box-shadow:0 2px 20px rgba(14,116,144,.10); padding:28px; max-width:520px; width:100%; }}
+.status-row {{ display:flex; align-items:center; gap:12px; margin-bottom:20px; }}
+.spinner {{ width:24px; height:24px; border:3px solid #e0e0e0; border-top-color:#0E7490; border-radius:50%; animation:spin .8s linear infinite; flex-shrink:0; }}
 @keyframes spin {{ to {{ transform:rotate(360deg); }} }}
-.status-text {{ font-size:1.1em; font-weight:600; color:#333; }}
-.filename-tag {{ background:#e8f5f9; color:#0E7490; padding:4px 11px; border-radius:5px; font-size:0.88em; font-weight:600; margin-left:8px; word-break:break-all; }}
-.phases {{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }}
-.phase {{ padding:5px 14px; border-radius:13px; font-size:0.8em; font-weight:600; background:#f0f0f0; color:#999; transition:all .3s; }}
+.status-text {{ font-size:1em; font-weight:600; color:#333; }}
+.filename-tag {{ background:#e8f5f9; color:#0E7490; padding:3px 9px; border-radius:4px; font-size:0.82em; font-weight:600; margin-left:8px; word-break:break-all; }}
+.phases {{ display:flex; gap:6px; margin-bottom:18px; flex-wrap:wrap; }}
+.phase {{ padding:4px 11px; border-radius:12px; font-size:0.74em; font-weight:600; background:#f0f0f0; color:#999; transition:all .3s; }}
 .phase.active {{ background:#0E7490; color:white; }}
 .phase.done   {{ background:#27ae60; color:white; }}
-.log {{ background:#1a1a2e; color:#a8d8a8; border-radius:10px; padding:14px 16px; font-family:'Consolas','Courier New',monospace; font-size:0.82em; min-height:80px; flex:1; overflow-y:auto; line-height:1.55; margin-bottom:16px; white-space:pre-wrap; word-break:break-all; }}
+.log {{ background:#1a1a2e; color:#a8d8a8; border-radius:8px; padding:10px 12px; font-family:'Consolas','Courier New',monospace; font-size:0.75em; min-height:80px; max-height:180px; overflow-y:auto; line-height:1.5; margin-bottom:18px; white-space:pre-wrap; word-break:break-all; }}
 .line-phase {{ color:#67d8f0; font-weight:bold; }}
 .line-done  {{ color:#67f0a0; font-weight:bold; }}
 .line-warn  {{ color:#f0c040; }}
 .line-err   {{ color:#f06060; }}
-.btn-row {{ display:flex; gap:12px; }}
-.view-btn {{ flex:1; padding:13px; text-align:center; background:#22c55e; color:white; border:none; border-radius:8px; font-size:1em; font-weight:700; cursor:pointer; text-decoration:none; display:inline-block; transition:background .2s; opacity:0.45; pointer-events:none; }}
+.btn-row {{ display:flex; gap:10px; flex-wrap:wrap; }}
+.view-btn {{ padding:11px 28px; background:#22c55e; color:white; border:none; border-radius:7px; font-size:0.95em; font-weight:700; cursor:pointer; text-decoration:none; display:inline-block; transition:background .2s; opacity:0.45; pointer-events:none; }}
 .view-btn.ready       {{ opacity:1; pointer-events:auto; }}
 .view-btn.ready:hover {{ background:#16a34a; }}
-.back-btn {{ flex:1; padding:13px; text-align:center; background:#f0f0f0; color:#555; border:none; border-radius:8px; font-size:1em; cursor:pointer; text-decoration:none; display:inline-block; }}
+.back-btn {{ padding:11px 20px; background:#f0f0f0; color:#555; border:none; border-radius:7px; font-size:0.95em; cursor:pointer; text-decoration:none; display:inline-block; }}
 .back-btn:hover {{ background:#e0e0e0; }}
 </style>
 </head>
 <body>
 
 <div class="hdr">
-  <div>
-    <div class="hdr-logo">CV-<span>Toposheet</span></div>
-    <div class="hdr-sub">Extracted Map Features</div>
-  </div>
+  <div class="hdr-logo">CV-<span>Toposheet</span></div>
 </div>
 
 <div class="page">

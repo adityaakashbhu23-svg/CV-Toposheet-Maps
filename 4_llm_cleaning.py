@@ -57,8 +57,11 @@ def run_llm_cleaning() -> dict:
         grid_data = json.load(f)
 
     ensemble = _use_ensemble()
-    mode_tag = 'ENSEMBLE (all LLMs parallel)' if ensemble else f'SINGLE ({config.LLM_PROVIDER.upper()})'
-    print(f'[LLM] Mode: {mode_tag}')
+    if ensemble:
+        workers = getattr(config, 'LLM_ENSEMBLE_WORKERS', 6)
+        print(f'[LLM] Mode: ENSEMBLE (parallel, workers={workers})')
+    else:
+        print(f'[LLM] Mode: SINGLE ({config.LLM_PROVIDER.upper()})')
 
     llm_results = {}
 

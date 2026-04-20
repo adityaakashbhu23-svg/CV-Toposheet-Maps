@@ -2,6 +2,7 @@
 # Reads all settings from .env so no secrets are ever hardcoded.
 
 import os
+from utils.cpu_utils import throttler as _throttler  # starts background monitor on import
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -23,8 +24,11 @@ LLM_PROVIDER    = os.getenv('LLM_PROVIDER', 'vertex').lower()
 # Ensemble mode: run ALL configured LLMs in parallel and vote on results.
 # Set ENSEMBLE_MODE=true in .env, or pass --ensemble flag to 4_llm_cleaning.py.
 ENSEMBLE_MODE   = os.getenv('ENSEMBLE_MODE', 'false').lower() in ('1', 'true', 'yes')
-# Max parallel LLM workers in ensemble (keep ≤ 6 to avoid CPU/memory pressure)
-LLM_ENSEMBLE_WORKERS = int(os.getenv('LLM_ENSEMBLE_WORKERS', '6'))
+
+# CPU workers — always start at full CPU count; ThermalThrottler reduces live if hot
+# Override with LLM_ENSEMBLE_WORKERS=N in .env to cap ensemble parallelism
+_default_workers = str(os.cpu_count() or 6)
+LLM_ENSEMBLE_WORKERS = int(os.getenv('LLM_ENSEMBLE_WORKERS', _default_workers))
 
 # Model names
 OPENAI_MODEL    = os.getenv('OPENAI_MODEL',  'gpt-4o-mini')
@@ -48,7 +52,8 @@ if _gcv_creds_path.exists():
 # ── OCR / Tiling ──────────────────────────────────────────────
 OCR_ENGINE      = os.getenv('OCR_ENGINE', 'gcv').lower()   # gcv | easyocr | tesseract
 OCR_CONFIDENCE  = float(os.getenv('OCR_CONFIDENCE_THRESHOLD', '0.3'))
-OCR_WORKERS     = int(os.getenv('OCR_WORKERS', '4'))        # parallel tile workers
+# OCR workers — default to ALL logical cores; override with OCR_WORKERS=N in .env
+OCR_WORKERS     = int(os.getenv('OCR_WORKERS', str(os.cpu_count() or 4)))  # parallel tile workers
 TILE_SIZE       = int(os.getenv('TILE_SIZE',   '1024'))
 TILE_OVERLAP    = int(os.getenv('TILE_OVERLAP', '50'))
 

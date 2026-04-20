@@ -22,6 +22,29 @@ def _get_easyocr():
     return _easyocr_reader
 
 
+# Google Cloud Vision client – singleton to avoid per-tile auth overhead
+_gcv_client = None
+_gcv_client_lock = None  # will be set to threading.Lock on first use
+
+# EasyOCR is not thread-safe – serialize all calls behind a lock
+import threading as _threading
+_easyocr_lock = _threading.Lock()
+
+def _get_gcv_client():
+    """Return a cached GCV ImageAnnotatorClient (initializes once per process)."""
+    global _gcv_client, _gcv_client_lock
+    import threading
+    if _gcv_client_lock is None:
+        _gcv_client_lock = threading.Lock()
+    with _gcv_client_lock:
+        if _gcv_client is None:
+            from google.cloud import vision
+            print('[OCR/GCV] Initializing Google Cloud Vision client...')
+            _gcv_client = vision.ImageAnnotatorClient()
+            print('[OCR/GCV] GCV client ready.')
+    return _gcv_client
+
+
 def ocr_tile_gcv(tile: np.ndarray, confidence_threshold: float = 0.3) -> List[Dict]:
     """
     Run Google Cloud Vision DOCUMENT_TEXT_DETECTION on a single tile.
@@ -38,7 +61,7 @@ def ocr_tile_gcv(tile: np.ndarray, confidence_threshold: float = 0.3) -> List[Di
     Returns a list of dicts: {text, confidence, bbox: [x1,y1,x2,y2]}
     """
     try:
-        from google.cloud import vision
+        from google.cloud import vision as _vision_check  # noqa: just verify installed
     except ImportError:
         print('[OCR/GCV] google-cloud-vision not installed. Run: pip install google-cloud-vision')
         return []
@@ -51,8 +74,9 @@ def ocr_tile_gcv(tile: np.ndarray, confidence_threshold: float = 0.3) -> List[Di
     image_bytes = buf.tobytes()
 
     try:
-        client   = vision.ImageAnnotatorClient()
-        image    = vision.Image(content=image_bytes)
+        from google.cloud import vision as _vision
+        client   = _get_gcv_client()
+        image    = _vision.Image(content=image_bytes)
         response = client.document_text_detection(image=image)
     except Exception as e:
         print(f'[OCR/GCV] API error: {e}')
@@ -107,7 +131,8 @@ def ocr_tile_easyocr(tile: np.ndarray, confidence_threshold: float = 0.3) -> Lis
     """
     reader = _get_easyocr()
     try:
-        results = reader.readtext(tile, detail=1, paragraph=False)
+        with _easyocr_lock:
+            results = reader.readtext(tile, detail=1, paragraph=False)
     except Exception as e:
         print(f'[OCR] EasyOCR error: {e}')
         return []
