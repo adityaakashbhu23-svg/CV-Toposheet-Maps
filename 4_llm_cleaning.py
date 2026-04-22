@@ -22,9 +22,22 @@ from utils.llm_utils import (
     _load_spelling_variants,
 )
 
-# ── Country-aware system prompt ──────────────────────────────────────────────
-llm_utils.SYSTEM_PROMPT = llm_utils.build_system_prompt(config.MAP_COUNTRY)
-print(f'[LLM] Country prompt loaded: {config.MAP_COUNTRY.upper()}')
+# ── Country-aware system prompt — AUTO-DETECTED from OCR text ────────────────
+def _detect_country_from_ocr() -> str:
+    """Read ocr_results_raw.json and auto-detect the map's country of origin."""
+    ocr_path = config.LOGS_FOLDER / 'ocr_results_raw.json'
+    if ocr_path.exists():
+        try:
+            data = json.load(open(ocr_path, encoding='utf-8'))
+            country = llm_utils.detect_country(data, fallback=config.MAP_COUNTRY)
+            return country
+        except Exception:
+            pass
+    return config.MAP_COUNTRY
+
+_detected_country = _detect_country_from_ocr()
+llm_utils.SYSTEM_PROMPT = llm_utils.build_system_prompt(_detected_country)
+print(f'[LLM] Country auto-detected: {_detected_country.upper()}')
 
 # Pre-warm spelling variants cache so the first map doesn't pay load cost
 _load_spelling_variants()

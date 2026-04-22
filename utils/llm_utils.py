@@ -31,6 +31,76 @@ def _load_country_block(country: str) -> str:
     return ''
 
 
+# Keywords printed on real maps that identify their country of origin.
+# Each tuple is (keyword_lowercase, country).  First match wins.
+_COUNTRY_KEYWORDS = [
+    # India — Survey of India is the dominant agency
+    ('survey of india',         'india'),
+    ('published by the survey of india', 'india'),
+    ('printed at the survey of india', 'india'),
+    ('dehra dun',               'india'),
+    ('dehradun',                'india'),
+    ('s.o.i.',                  'india'),
+    # Pakistan — Survey of Pakistan / pre-partition SOI heritage sheets
+    ('survey of pakistan',      'pakistan'),
+    ('s.o.p.',                  'pakistan'),
+    # UK — Ordnance Survey
+    ('ordnance survey',         'uk'),
+    ('published by ordnance',   'uk'),
+    ('crown copyright',         'uk'),
+    ('o.s. sheet',              'uk'),
+    # USA — USGS
+    ('u.s. geological survey',  'usa'),
+    ('united states geological', 'usa'),
+    ('usgs',                    'usa'),
+    ('department of the interior', 'usa'),
+    # Germany
+    ('topographische karte',    'germany'),
+    ('landesvermessung',        'germany'),
+    ('messtischblatt',          'germany'),
+    ('bayerisches landesamt',   'germany'),
+    # France
+    ('institut géographique',   'france'),
+    ('institut geographique',   'france'),
+    ('carte de france',         'france'),
+    ('ign',                     'france'),
+    ('service géographique',    'france'),
+    ('service geographique',    'france'),
+]
+
+
+def detect_country(ocr_texts: list, fallback: str = 'india') -> str:
+    """
+    Scan a flat list of OCR strings extracted from a map and return the
+    most likely country code ('india', 'uk', 'usa', 'germany', 'france',
+    'pakistan').  Falls back to *fallback* (default 'india') if nothing
+    matches.
+
+    *ocr_texts* can be a list of strings, a list of dicts with a 'text'
+    key, or a nested list — the function flattens automatically.
+    """
+    # Flatten whatever structure is passed in
+    flat: list[str] = []
+    def _collect(obj):
+        if isinstance(obj, str):
+            flat.append(obj)
+        elif isinstance(obj, dict):
+            for v in obj.values():
+                _collect(v)
+        elif isinstance(obj, (list, tuple)):
+            for item in obj:
+                _collect(item)
+    _collect(ocr_texts)
+
+    combined = ' '.join(flat).lower()
+
+    for keyword, country in _COUNTRY_KEYWORDS:
+        if keyword in combined:
+            return country
+
+    return fallback
+
+
 def build_system_prompt(country: str = 'india') -> str:
     """Build the full LLM system prompt with country-specific knowledge injected."""
     country = country.lower().strip()
@@ -380,7 +450,7 @@ def clean_with_claude(
                 parsed = _parse_llm_json(content)
                 all_results.extend(parsed)
                 print(f'[LLM/Claude] Batch {batch_num}/{total_batches}: {len(parsed)} features')
-                time.sleep(8)  # respect 10K tokens/min rate limit
+                time.sleep(1)  # paid tier — 1s gap is sufficient
                 break
             except Exception as e:
                 err_str = str(e)

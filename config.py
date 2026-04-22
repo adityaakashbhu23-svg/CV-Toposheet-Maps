@@ -52,8 +52,9 @@ if _gcv_creds_path.exists():
 # ── OCR / Tiling ──────────────────────────────────────────────
 OCR_ENGINE      = os.getenv('OCR_ENGINE', 'gcv').lower()   # gcv | easyocr | tesseract
 OCR_CONFIDENCE  = float(os.getenv('OCR_CONFIDENCE_THRESHOLD', '0.3'))
-# OCR workers — default to ALL logical cores; override with OCR_WORKERS=N in .env
-OCR_WORKERS     = int(os.getenv('OCR_WORKERS', str(os.cpu_count() or 4)))  # parallel tile workers
+# OCR workers — default to 4; override with OCR_WORKERS=N in .env
+# Keeping this at 4 (not cpu_count) avoids OpenBLAS OOM on large maps
+OCR_WORKERS     = int(os.getenv('OCR_WORKERS', '4'))  # parallel tile workers
 TILE_SIZE       = int(os.getenv('TILE_SIZE',   '1024'))
 TILE_OVERLAP    = int(os.getenv('TILE_OVERLAP', '50'))
 

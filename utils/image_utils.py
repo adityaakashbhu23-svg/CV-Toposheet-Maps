@@ -7,13 +7,39 @@ from typing import List, Tuple, Generator
 
 
 def load_image(image_path: str) -> np.ndarray:
-    """Load an image from disk. Raises FileNotFoundError if missing."""
+    """
+    Load an image from disk. Raises FileNotFoundError if missing.
+    On OpenCV OutOfMemoryError, retries at progressively reduced scales
+    (1/2, then 1/4) so very large maps don't crash the pipeline.
+    """
     path = Path(image_path)
     if not path.exists():
         raise FileNotFoundError(f'Image not found: {image_path}')
-    img = cv2.imread(str(path))
+
+    # Try full resolution first
+    try:
+        img = cv2.imread(str(path))
+        if img is not None:
+            return img
+    except cv2.error as e:
+        if 'Insufficient memory' not in str(e) and 'OutOfMemory' not in str(e):
+            raise  # unexpected cv2 error — re-raise it
+        print(f'[WARN] load_image: OOM at full scale, retrying at 1/2 scale ...')
+
+    # Fallback 1: half resolution (uses 1/4 of the memory)
+    try:
+        img = cv2.imread(str(path), cv2.IMREAD_REDUCED_COLOR_2)
+        if img is not None:
+            print(f'[WARN] Loaded at 1/2 scale due to memory limits: {path.name}')
+            return img
+    except cv2.error:
+        print(f'[WARN] load_image: still OOM at 1/2 scale, retrying at 1/4 scale ...')
+
+    # Fallback 2: quarter resolution (uses 1/16 of the memory)
+    img = cv2.imread(str(path), cv2.IMREAD_REDUCED_COLOR_4)
     if img is None:
-        raise ValueError(f'Could not decode image: {image_path}')
+        raise ValueError(f'Could not decode image (tried full, 1/2, 1/4 scale): {image_path}')
+    print(f'[WARN] Loaded at 1/4 scale due to memory limits: {path.name}')
     return img
 
 

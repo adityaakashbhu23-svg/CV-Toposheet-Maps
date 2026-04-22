@@ -111,7 +111,7 @@ def export_csv(rows: list):
                 r['feature_type'],
                 f"{r['confidence']:.2f}",
             ])
-    print(f"[Export] CSV → {OUT_CSV}  ({len(rows)} rows)")
+    print(f"[Export] CSV -> {OUT_CSV}  ({len(rows)} rows)")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -197,6 +197,8 @@ body {{ font-family:'Segoe UI',Arial,sans-serif; background:#f0f2f5; color:#222;
 .sb-acts {{ display:flex; gap:5px; }}
 .sb-btn {{ font-size:0.73em; padding:3px 8px; border:1px solid #ccc; border-radius:3px; background:white; cursor:pointer; color:#555; }}
 .sb-btn:hover {{ background:#eef; }}
+.sb-btn-del {{ font-size:0.73em; padding:3px 8px; border:1px solid #f5a5a5; border-radius:3px; background:#fff5f5; cursor:pointer; color:#c00; }}
+.sb-btn-del:hover {{ background:#ffe0e0; border-color:#e00; }}
 .sb-maps {{ flex:1; overflow-y:auto; padding:7px; }}
 .map-label {{ display:flex; align-items:center; gap:6px; padding:6px 7px; border-radius:5px; cursor:pointer; margin-bottom:3px; border:1px solid transparent; font-size:0.8em; transition:background .1s; }}
 .map-label:hover {{ background:#f0f4ff; border-color:#d0d8f0; }}
@@ -290,6 +292,7 @@ tr:hover td {{ background:#f5f8ff; }}
       <div class="sb-acts">
         <button class="sb-btn" onclick="setAll(true)">Select All</button>
         <button class="sb-btn" onclick="setAll(false)">Clear All</button>
+        <button class="sb-btn sb-btn-del" onclick="deleteSelected()">&#128465; Delete</button>
       </div>
     </div>
     <div class="sb-maps">
@@ -332,7 +335,7 @@ tr:hover td {{ background:#f5f8ff; }}
 {table_rows_html}
         </tbody>
       </table>
-      <div class="no-rows" id="noRows" style="display:none">No matching features found.</div>
+      <div class="no-rows" id="noRows" style="display:{'none' if rows else ''}">No features have been extracted yet. Try processing a map first.</div>
     </div>
   </div>
 
@@ -373,21 +376,70 @@ function applyFilters() {{
     if (show) vis++;
   }});
   document.getElementById('rowCnt').textContent = vis.toLocaleString() + ' rows';
-  document.getElementById('noRows').style.display = vis === 0 ? '' : 'none';
+  var noRows = document.getElementById('noRows');
+  if (vis === 0) {{
+    noRows.textContent = allRows.length === 0
+      ? 'No features have been extracted yet. Try processing a map first.'
+      : 'No matching features found.';
+    noRows.style.display = '';
+  }} else {{
+    noRows.style.display = 'none';
+  }}
 }}
 
 function onToggle() {{
   var n = getChecked().length;
-  var btn = document.getElementById('cmpBtn');
+  var btn  = document.getElementById('cmpBtn');
   var hint = document.getElementById('cmpHint');
-  btn.disabled = n < 2;
-  hint.textContent = n < 2 ? 'Check 2+ maps to compare' : n + ' maps selected \u2014 click to compare';
-  applyFilters();
+  if (btn)  btn.disabled = n < 2;
+  if (hint) hint.textContent = n < 2 ? 'Check 2+ maps to compare' : n + ' maps selected \u2014 click Compare';
+  try {{ applyFilters(); }} catch(e) {{}}
 }}
 
 function setAll(v) {{
   document.querySelectorAll('.map-cb').forEach(function(cb) {{ cb.checked = v; }});
   onToggle();
+}}
+
+function deleteSelected() {{
+  var keys = getChecked();
+  if (keys.length === 0) {{ alert('No maps selected. Please check at least one map first.'); return; }}
+  var names = keys.slice(0, 5).join('\\n') + (keys.length > 5 ? '\\n... and ' + (keys.length - 5) + ' more' : '');
+  if (!confirm('Permanently delete ' + keys.length + ' map(s) and ALL their extracted data?\\n\\n' + names)) return;
+
+  function removeDom() {{
+    keys.forEach(function(mk) {{
+      document.querySelectorAll('.map-cb').forEach(function(cb) {{
+        if (cb.value === mk) cb.closest('label').remove();
+      }});
+      allRows = allRows.filter(function(row) {{
+        if (row.dataset.mk === mk) {{ row.remove(); return false; }}
+        return true;
+      }});
+    }});
+    onToggle();
+    applyFilters();
+  }}
+
+  fetch('http://localhost:5000/delete_maps', {{
+    method: 'POST',
+    headers: {{'Content-Type': 'application/json'}},
+    body: JSON.stringify({{maps: keys}})
+  }})
+  .then(function(r) {{ return r.json(); }})
+  .then(function(d) {{
+    if (d.ok) {{
+      removeDom();
+      alert('\u2714 Deleted ' + keys.length + ' map(s) from database.');
+    }} else {{
+      alert('Error: ' + (d.error || 'Unknown'));
+    }}
+  }})
+  .catch(function() {{
+    // Server not reachable (opened via file://) — remove from view only
+    removeDom();
+    alert('Removed from view.\\nTo permanently delete from database, open via http://localhost:5000/results');
+  }});
 }}
 
 function clearFilters() {{
@@ -417,13 +469,15 @@ function esc(s) {{
 
 function runCompare() {{
   var maps = getChecked();
-  if (maps.length < 2) return;
+  if (maps.length < 2) {{ alert('Please select at least 2 maps to compare.'); return; }}
+  try {{
 
-  /* build per-map data */
+  /* build per-map data — trim keys so whitespace differences don't break matching */
   var data = {{}};
+  maps = maps.map(function(m) {{ return m.trim(); }});
   maps.forEach(function(mk) {{ data[mk] = {{ names: new Set(), rows: [] }}; }});
   allRows.forEach(function(row) {{
-    var mk = row.dataset.mk;
+    var mk = (row.dataset.mk || '').trim();
     if (data[mk]) {{
       var fn = (row.dataset.fn || '').trim();
       if (fn) data[mk].names.add(fn);
@@ -504,10 +558,14 @@ function runCompare() {{
   }});
 
   document.getElementById('cpBody').innerHTML = bodyHTML;
-  document.getElementById('cpTag').textContent = 'Comparing: ' + maps.join(' \u2014 ');
+  document.getElementById('cpTag').textContent = 'Comparing ' + maps.length + ' maps';
 
   document.getElementById('mainView').style.display = 'none';
   document.getElementById('cmpPanel').style.display = 'flex';
+
+  }} catch(err) {{
+    alert('Compare error: ' + err.message + '\n\nTry selecting fewer maps or reload the page.');
+  }}
 }}
 
 function closeCompare() {{
@@ -531,7 +589,7 @@ onToggle();
 
     with open(OUT_HTML, 'w', encoding='utf-8') as f:
         f.write(html)
-    print(f"[Export] HTML → {OUT_HTML}  (open in browser)")
+    print(f"[Export] HTML -> {OUT_HTML}  (open in browser)")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -565,13 +623,14 @@ def main():
     if type_filter:
         print(f"         Type filter : '{type_filter}'")
 
+    ensure_features_table()   # create table if DB is new or was never initialised
     rows = fetch_rows(map_filter, type_filter)
 
     if not rows:
-        print("[Export] No results found.")
-        return
+        print("[Export] No features found — writing empty results page.")
+    else:
+        print(f"[Export] Found {len(rows)} features\n")
 
-    print(f"[Export] Found {len(rows)} features\n")
     export_csv(rows)
     export_html(rows, map_filter, type_filter)
 

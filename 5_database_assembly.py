@@ -23,12 +23,19 @@ JSON_PATH = config.RESULTS_FOLDER / 'extracted_data.json'
 
 
 def build_database() -> None:
-    config.validate()
+    # Validate config but don't let it crash when called from the pipeline subprocess
+    try:
+        config.validate()
+    except SystemExit as e:
+        print(f'[DB] Config warning (continuing): {e}')
 
     if not LLM_PATH.exists():
-        print(f'[DB] LLM corrections not found: {LLM_PATH}')
-        print('     Run 4_llm_cleaning.py first.')
-        sys.exit(1)
+        print(f'[DB] LLM corrections not found: {LLM_PATH} — building empty database.')
+        # Create an empty DB so export_table.py doesn't hit "no such table: features"
+        if DB_PATH.exists():
+            DB_PATH.unlink()
+        init_db(str(DB_PATH))
+        return
 
     with open(LLM_PATH, encoding='utf-8') as f:
         llm_data = json.load(f)

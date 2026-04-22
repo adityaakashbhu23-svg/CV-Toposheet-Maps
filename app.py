@@ -4,11 +4,14 @@
 #
 
 import sys
+import time
 import threading
+import queue
 import json
 import os
 import re
 import uuid
+import shutil
 import sqlite3
 import importlib
 import subprocess
@@ -26,6 +29,7 @@ MAPS_DIR = BASE_DIR / 'maps'
 ALLOWED_EXT = {'.jpg', '.jpeg', '.png', '.tif', '.tiff'}
 
 _process_lock = threading.Lock()
+_current_proc = None   # currently running subprocess (for kill support)
 
 _MODEL_ENVS = {
     'best':     {'LLM_PROVIDER': 'vertex',  'OCR_ENGINE': 'gcv'},
@@ -57,6 +61,63 @@ def _map_count() -> int:
     if not MAPS_DIR.exists():
         return 0
     return sum(1 for _ in MAPS_DIR.rglob('*') if _.suffix.lower() in ALLOWED_EXT)
+
+
+def _merge_session_to_global(session_id: str) -> None:
+    """Copy newly processed map(s) from a session DB into the global DB,
+    then regenerate the global table_export.html so Map Database stays current."""
+    session_db = BASE_DIR / 'results' / session_id / 'toposheet.db'
+    global_db  = RESULTS_DIR / 'toposheet.db'
+    if not session_db.exists():
+        return
+    try:
+        from utils.db_utils import init_db
+        if not global_db.exists():
+            init_db(str(global_db))
+
+        with sqlite3.connect(str(global_db)) as gcon:
+            gcon.execute('ATTACH DATABASE ? AS sdb', (str(session_db),))
+            maps_in_session = [r[0] for r in gcon.execute(
+                'SELECT DISTINCT map_name FROM sdb.features'
+            ).fetchall()]
+            inserted = 0
+            for map_name in maps_in_session:
+                already = gcon.execute(
+                    'SELECT 1 FROM features WHERE map_name=? LIMIT 1', (map_name,)
+                ).fetchone()
+                if not already:
+                    cur = gcon.execute("""
+                        INSERT INTO features
+                            (map_name, original_text, feature_name, feature_type,
+                             grid_reference, confidence, tile_x, tile_y,
+                             bbox_x1, bbox_y1, bbox_x2, bbox_y2,
+                             lat_min, lat_max, lon_min, lon_max,
+                             sheet_ref, district, survey_year, map_scale, verified)
+                        SELECT map_name, original_text, feature_name, feature_type,
+                               grid_reference, confidence, tile_x, tile_y,
+                               bbox_x1, bbox_y1, bbox_x2, bbox_y2,
+                               lat_min, lat_max, lon_min, lon_max,
+                               sheet_ref, district, survey_year, map_scale, verified
+                        FROM sdb.features WHERE map_name=?
+                    """, (map_name,))
+                    inserted += cur.rowcount
+            gcon.commit()
+
+        if inserted > 0:
+            # Regenerate the global HTML so Map Database reflects the new map
+            genv = os.environ.copy()
+            genv['RESULTS_FOLDER'] = str(RESULTS_DIR)
+            genv['PYTHONIOENCODING'] = 'utf-8'
+            subprocess.run(
+                [sys.executable, 'export_table.py'],
+                cwd=str(BASE_DIR), env=genv,
+                timeout=120, capture_output=True
+            )
+            print(f'[merge] Added {inserted} features from session {session_id} to global DB.')
+        else:
+            print(f'[merge] Session {session_id} maps already in global DB — skipped.')
+    except Exception as e:
+        print(f'[merge] Warning: could not merge session to global DB: {e}')
 
 
 def _write_env(env: dict):
@@ -139,6 +200,55 @@ def upload():
     return redirect(f'/process/{url_quote(combined, safe="")}?model={url_quote(model, safe="")}&session={url_quote(session_id, safe="")}')
 
 
+@app.route('/kill', methods=['POST'])
+def kill_process():
+    global _current_proc
+    killed = False
+    if _current_proc is not None:
+        try:
+            if os.name == 'nt':
+                # Force-kill process AND all its children (OCR workers, LLM calls etc.)
+                subprocess.call(['taskkill', '/F', '/T', '/PID', str(_current_proc.pid)],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                _current_proc.kill()
+            killed = True
+        except Exception:
+            pass
+        finally:
+            _current_proc = None
+    # Release the lock so the next map can be processed immediately
+    try:
+        _process_lock.release()
+    except RuntimeError:
+        pass  # wasn't held
+    return json.dumps({'killed': killed})
+
+
+@app.route('/restart', methods=['POST'])
+def restart_server():
+    """Kill any running job and release the lock so the server is ready for a new upload."""
+    global _current_proc
+    # Force-kill running subprocess and any children
+    if _current_proc is not None:
+        try:
+            if os.name == 'nt':
+                subprocess.call(['taskkill', '/F', '/T', '/PID', str(_current_proc.pid)],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                _current_proc.kill()
+        except Exception:
+            pass
+        finally:
+            _current_proc = None
+    # Release the processing lock so new jobs can run
+    try:
+        _process_lock.release()
+    except RuntimeError:
+        pass
+    return json.dumps({'ok': True})
+
+
 @app.route('/stream/<path:filename>')
 def stream(filename):
     model = request.args.get('model', 'best')
@@ -151,6 +261,7 @@ def stream(filename):
 
 
 def _stream_gen(filename, model, session_id):
+    global _current_proc
     env_overrides = _MODEL_ENVS.get(model, _MODEL_ENVS['best'])
 
     if not _process_lock.acquire(blocking=False):
@@ -161,6 +272,8 @@ def _stream_gen(filename, model, session_id):
     try:
         env = os.environ.copy()
         env.update(env_overrides)
+        env['PYTHONIOENCODING'] = 'utf-8'
+        env['PYTHONUNBUFFERED'] = '1'
 
         session_maps_dir    = str(BASE_DIR / 'maps'    / session_id)
         session_results_dir = str(BASE_DIR / 'results' / session_id)
@@ -189,16 +302,50 @@ def _stream_gen(filename, model, session_id):
                 bufsize=1,
                 env=env,
             )
-            for line in iter(proc.stdout.readline, ''):
+            _current_proc = proc
+
+            # Read subprocess output in a background thread so we can send
+            # SSE keepalive heartbeats when the process is silent (e.g. GCV
+            # API calls), preventing the browser from closing the connection.
+            line_q = queue.Queue()
+            def _reader(pipe, q):
+                for ln in iter(pipe.readline, ''):
+                    q.put(ln)
+                q.put(None)  # sentinel
+            t = threading.Thread(target=_reader, args=(proc.stdout, line_q), daemon=True)
+            t.start()
+
+            while True:
+                try:
+                    line = line_q.get(timeout=15)
+                except queue.Empty:
+                    # No output for 15 s — send a keepalive comment so the
+                    # browser knows the connection is still alive.
+                    yield ': keepalive\n\n'
+                    continue
+                if line is None:  # sentinel — subprocess closed stdout
+                    break
                 line = line.rstrip()
                 if line:
                     yield f'data: {json.dumps({"msg": line})}\n\n'
+
             proc.wait()
+            _current_proc = None
+            if label == 'pipeline' and proc.returncode not in (0, None):
+                yield f'data: {json.dumps({"msg": f"[ERROR] Pipeline exited with code {proc.returncode} — check logs", "error": True})}\n\n'
+                return
+
+        # Merge this session into the global DB so Map Database stays up to date
+        yield 'data: {"msg": "Saving to Map Database..."}\n\n'
+        _merge_session_to_global(session_id)
 
         yield f'data: {json.dumps({"done": True, "redirect": results_url, "msg": "Done! Click View Results."})}\n\n'
 
     finally:
-        _process_lock.release()
+        try:
+            _process_lock.release()
+        except RuntimeError:
+            pass
 
 
 @app.route('/process/<path:filename>')
@@ -216,8 +363,8 @@ def get_env():
     return json.dumps({k: os.environ.get(k, '') for k in keys})
 
 
-@app.route('/results')
-@app.route('/results/<session_id>')
+@app.route('/results', methods=['GET', 'HEAD'])
+@app.route('/results/<session_id>', methods=['GET', 'HEAD'])
 def results(session_id=None):
     if session_id:
         out = BASE_DIR / 'results' / session_id / 'table_export.html'
@@ -226,26 +373,89 @@ def results(session_id=None):
         out = RESULTS_DIR / 'table_export.html'
         res_dir = str(RESULTS_DIR)
 
+    # HEAD request (used by the polling check in the processing page)
+    # Only return 200 if the HTML already exists — don't generate on HEAD
+    if request.method == 'HEAD':
+        if out.exists():
+            return '', 200
+        return '', 404
+
     # If HTML not yet generated, try to generate it on-demand from the DB
+    # (also runs when DB doesn't exist yet — export_table handles empty/missing DB gracefully)
     if not out.exists():
-        db_path = Path(res_dir) / 'toposheet.db'
-        if db_path.exists() and db_path.stat().st_size > 0:
-            try:
-                env = os.environ.copy()
-                env['RESULTS_FOLDER'] = res_dir
-                subprocess.run(
-                    [sys.executable, 'export_table.py'],
-                    cwd=str(BASE_DIR), env=env,
-                    timeout=60, capture_output=True
-                )
-            except Exception:
-                pass
+        try:
+            Path(res_dir).mkdir(parents=True, exist_ok=True)
+            env = os.environ.copy()
+            env['RESULTS_FOLDER'] = res_dir
+            env['PYTHONIOENCODING'] = 'utf-8'
+            env['PYTHONUNBUFFERED'] = '1'
+            subprocess.run(
+                [sys.executable, 'export_table.py'],
+                cwd=str(BASE_DIR), env=env,
+                timeout=60, capture_output=True
+            )
+        except Exception:
+            pass
 
     if out.exists():
         return send_file(str(out))
     return ('<h2 style="font-family:sans-serif;padding:40px;color:#888">'
             'No results yet – please upload and process a map first.'
             ' <a href="/">&#8592; Go back</a></h2>'), 404
+
+
+@app.route('/delete_maps', methods=['POST', 'OPTIONS'])
+def delete_maps():
+    # Allow CORS so the page can call this even when opened as file://
+    if request.method == 'OPTIONS':
+        resp = app.response_class(status=204)
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        resp.headers['Access-Control-Allow-Methods'] = 'POST'
+        return resp
+
+    data = request.get_json(silent=True) or {}
+    maps_to_delete = data.get('maps', [])
+    if not maps_to_delete:
+        resp = app.response_class(json.dumps({'ok': False, 'error': 'No maps specified'}),
+                                  mimetype='application/json')
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        return resp, 400
+
+    deleted = 0
+    db_path = RESULTS_DIR / 'toposheet.db'
+    if db_path.exists():
+        try:
+            with sqlite3.connect(str(db_path)) as con:
+                placeholders = ','.join('?' * len(maps_to_delete))
+                cur = con.execute(
+                    f'DELETE FROM features WHERE map_name IN ({placeholders})',
+                    maps_to_delete
+                )
+                deleted = cur.rowcount
+                con.commit()
+        except Exception as e:
+            resp = app.response_class(json.dumps({'ok': False, 'error': str(e)}),
+                                      mimetype='application/json')
+            resp.headers['Access-Control-Allow-Origin'] = '*'
+            return resp, 500
+
+    # Regenerate the HTML export so it reflects the deletion
+    try:
+        env = os.environ.copy()
+        env['RESULTS_FOLDER'] = str(RESULTS_DIR)
+        env['PYTHONIOENCODING'] = 'utf-8'
+        subprocess.run([sys.executable, 'export_table.py'],
+                       cwd=str(BASE_DIR), env=env, timeout=60, capture_output=True)
+    except Exception:
+        pass
+
+    resp = app.response_class(
+        json.dumps({'ok': True, 'deleted_rows': deleted, 'maps': len(maps_to_delete)}),
+        mimetype='application/json'
+    )
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp
 
 
 # ── Landing page HTML ─────────────────────────────────────────────────────────
@@ -270,7 +480,7 @@ body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; backg
 .hdr-logo span { color:#fff; }
 .hdr-sub  { font-size:0.78em; color:rgba(255,255,255,.75); margin-top:2px; }
 .hdr-actions { display:flex; align-items:center; gap:10px; }
-.settings-btn { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); color:#fff; border-radius:7px; padding:7px 14px; font-size:0.85em; cursor:pointer; transition:background .2s; }
+.settings-btn { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); color:#fff; border-radius:7px; padding:0 16px; height:36px; font-size:0.85em; font-weight:700; cursor:pointer; transition:background .2s; display:inline-flex; align-items:center; gap:5px; box-sizing:border-box; }
 .settings-btn:hover { background:rgba(255,255,255,.25); }
 #uploadForm { flex:1; display:flex; flex-direction:column; min-height:0; }
 .body { flex:1; display:flex; flex-direction:row; gap:16px; align-items:stretch; justify-content:stretch; padding:10px 8px; min-height:0; }
@@ -346,6 +556,10 @@ body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; backg
 .badge-optional { background:#f0fdf4; color:#166534; }
 .badge-claude  { background:#fae8ff; color:#86198f; }
 .badge-grok    { background:#fff7ed; color:#c2410c; }
+.db-banner-btn { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); color:#fff; border-radius:7px; padding:0 16px; height:36px; font-size:0.85em; font-weight:700; cursor:pointer; transition:background .2s; text-decoration:none; display:inline-flex; align-items:center; gap:5px; box-sizing:border-box; }
+.db-banner-btn:hover { background:rgba(255,255,255,.25); }
+.kill-banner-btn { background:#dc2626; border:1px solid #dc2626; color:#fff; border-radius:7px; padding:0 16px; height:36px; font-size:0.85em; font-weight:700; cursor:pointer; transition:background .2s; display:inline-flex; align-items:center; gap:5px; box-sizing:border-box; }
+.kill-banner-btn:hover { background:#b91c1c; }
 @media print { .modal-overlay, .hdr-actions { display:none !important; } }
 </style>
 </head>
@@ -357,6 +571,8 @@ body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; backg
     <div class="hdr-sub">Extracted Map Features</div>
   </div>
   <div class="hdr-actions">
+    <a href="/results" class="db-banner-btn" title="View all processed maps in the database" target="_blank">&#128202;&nbsp; Map Database</a>
+    <button class="kill-banner-btn" id="killBannerBtn" onclick="killRunningJob()" title="Kill any running job and restart the server">&#9632; Restart Server</button>
     <button class="settings-btn" onclick="openSettings()">&#9881;&#xFE0E; Settings</button>
   </div>
 </div>
@@ -510,6 +726,18 @@ const MODEL_INFO = {
   grok:     '<b>Grok (xAI):</b> Parallel GCV OCR + Grok-3-mini. Fast xAI inference. xAI API key required.',
   offline:  '<b>Offline OCR:</b> EasyOCR (local, no Google Cloud) + Groq LLaMA. Sequential OCR tiles – slower but no GCP needed.',
 };
+
+function killRunningJob() {
+  const btn = document.getElementById('killBannerBtn');
+  btn.disabled = true;
+  btn.style.background = '#b91c1c';
+  btn.textContent = '⏳ Stopping…';
+  fetch('/restart', {method:'POST'})
+    .finally(() => {
+      btn.textContent = '✔ Done — going home…';
+      setTimeout(() => { window.location.href = '/'; }, 800);
+    });
+}
 function selectCard(el) {
   document.querySelectorAll('.model-card').forEach(c => c.classList.remove('selected'));
   el.classList.add('selected');
@@ -798,6 +1026,9 @@ body {{ height:100vh; overflow:hidden; font-family:'Segoe UI', system-ui, Arial,
 .view-btn.ready:hover {{ background:#16a34a; }}
 .back-btn {{ flex:1; padding:13px; text-align:center; background:#f0f0f0; color:#555; border:none; border-radius:8px; font-size:1em; cursor:pointer; text-decoration:none; display:inline-block; }}
 .back-btn:hover {{ background:#e0e0e0; }}
+.kill-btn {{ background:#dc2626; border:none; color:#fff; border-radius:7px; padding:7px 16px; font-size:0.85em; font-weight:700; cursor:pointer; transition:background .2s; display:flex; align-items:center; gap:6px; }}
+.kill-btn:hover {{ background:#b91c1c; }}
+.kill-btn:disabled {{ background:#999; cursor:not-allowed; }}
 </style>
 </head>
 <body>
@@ -807,6 +1038,7 @@ body {{ height:100vh; overflow:hidden; font-family:'Segoe UI', system-ui, Arial,
     <div class="hdr-logo">CV-<span>Toposheet</span></div>
     <div class="hdr-sub">Extracted Map Features</div>
   </div>
+  <button class="kill-btn" id="killBtn" onclick="killProcess()">&#9632;&nbsp; Cancel Job</button>
 </div>
 
 <div class="page">
@@ -840,7 +1072,17 @@ body {{ height:100vh; overflow:hidden; font-family:'Segoe UI', system-ui, Arial,
 const logBox  = document.getElementById('logBox');
 const viewBtn = document.getElementById('viewBtn');
 const spinner = document.getElementById('spinner');
+const killBtn = document.getElementById('killBtn');
 let currentPhase = null;
+
+function killProcess() {{
+  killBtn.disabled = true;
+  killBtn.textContent = '⏳ Cancelling…';
+  killBtn.style.background = '#b91c1c';
+  fetch('/kill', {{method:'POST'}}).finally(() => {{
+    window.location.href = '/';
+  }});
+}}
 
 function setPhase(id) {{
   if (currentPhase === id) return;
@@ -876,14 +1118,42 @@ es.onmessage = function(e) {{
 
   if (data.done) {{
     spinner.style.display = 'none';
+    killBtn.style.display = 'none';
     viewBtn.classList.add('ready');
     if (data.redirect) viewBtn.href = data.redirect;
     es.close();
   }}
   if (data.error) {{
     spinner.style.display = 'none';
+    killBtn.style.display = 'none';
+    appendLine('Processing stopped. See log above for details.', 'line-err');
     es.close();
   }}
+}};
+
+// CRITICAL: close on connection drop — without this, EventSource auto-reconnects
+// every 3s and re-spawns the pipeline subprocess in an infinite loop.
+var _disconnected = false;
+es.onerror = function() {{
+  if (_disconnected) return;
+  _disconnected = true;
+  es.close();
+  spinner.style.display = 'none';
+  killBtn.style.display = 'none';
+  appendLine('[Stream disconnected — OCR/LLM processing continues in the background.]', 'line-warn');
+  appendLine('[Polling for completion... View Results will activate automatically when done.]', 'line-warn');
+  // Poll results endpoint every 20 s; enable View Results once HTML is available
+  var _poll = setInterval(function() {{
+    fetch('/results/{session_enc}', {{method:'HEAD'}})
+      .then(function(r) {{
+        if (r.ok) {{
+          clearInterval(_poll);
+          viewBtn.classList.add('ready');
+          appendLine('✅ Processing complete! Click View Results.', 'line-done');
+        }}
+      }})
+      .catch(function() {{}});
+  }}, 20000);
 }};
 </script>
 </body>
@@ -893,6 +1163,21 @@ es.onmessage = function(e) {{
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     import logging
+    # Kill any leftover processes on port 5000 before binding
+    if os.name == 'nt':
+        try:
+            result = subprocess.check_output(
+                'netstat -ano | findstr "127.0.0.1:5000" | findstr LISTENING',
+                shell=True, stderr=subprocess.DEVNULL
+            ).decode()
+            for line in result.strip().splitlines():
+                parts = line.split()
+                pid = parts[-1] if parts else None
+                if pid and pid.isdigit() and int(pid) != os.getpid():
+                    subprocess.call(f'taskkill /F /PID {pid}',
+                                    shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
     log = logging.getLogger('werkzeug')
     log.setLevel(logging.ERROR)
     print()

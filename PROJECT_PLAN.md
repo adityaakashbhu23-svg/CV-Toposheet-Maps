@@ -1,143 +1,220 @@
-# CV-Toposheet: Historical Map OCR + LLM Pipeline
+# CV-Toposheet: Historical Map Digitization Pipeline
 
 ## Project Vision
-Automating geographic data extraction from historical Survey of India topographical maps using:
-- **Computer Vision + OCR**: Extract text from large, dense maps with curved/overlapping typography
-- **LLM Post-processing**: Clean OCR noise, classify features (city/river/mountain), maintain accuracy 95%+
-- **Grid Localization**: Detect alphanumeric grid overlays (A-1, B-2, etc.) and assign coordinates
-- **Searchable Database**: Query results (e.g., "List all rivers in grid B-3")
+Automated extraction of geographic features from Survey of India topographical maps using:
+- **Computer Vision + OCR**: Extract text from large, dense maps (7500x10000px+)
+- **Multi-LLM Post-processing**: Clean OCR noise, classify features (settlement/river/mountain/landmark)
+- **Grid Localization**: Detect alphanumeric grid overlays and assign coordinates
+- **Web Interface**: Upload maps, watch live processing, view/export results as HTML table
+
+---
+
+## Current Status: FULLY OPERATIONAL ✅
+
+All 8 pipeline phases implemented and working. Flask web interface live at `localhost:5000`.
+
+---
 
 ## Architecture Overview
 
 ### Input
-- JPG maps: 2-6MB, 5000x7000px (Survey of India historical sheets)
+- JPG / PNG / TIF maps: up to 500 MB, any resolution
+- Survey of India sheets (standard 4x4 grid), UK OS, USGS, German, French, Pakistan maps supported
+- Multi-map upload: process multiple maps in one session
 
 ### Processing Pipeline
 
-#### 1. **Tiling Engine** (Local)
-- Split large maps into 1024x1024px tiles with 50px overlap
-- No downsampling; preserves text quality
-- Handles maps of any size
+#### Phase 1 — Tiling Engine (`1_tile_maps.py`)
+- Splits large maps into 1024x1024px tiles with 50px overlap
+- No downsampling — preserves full text quality
+- Generates `tiles_manifest.json` for incremental re-processing
+- Incremental: skips maps already tiled
 
-#### 2. **OCR Extraction** (Local)
-- **Primary**: EasyOCR (Google-backed, more stable than PaddleOCR)
-- **Fallback**: Tesseract (open-source, reliable)
-- Extract: text, bounding boxes, confidence scores
-- Output: Raw per-tile OCR results
+#### Phase 2 — OCR Extraction (`2_ocr_extraction.py`)
+- **Primary**: Google Cloud Vision (GCV) — highest accuracy, parallel tile processing
+- **Fallback 1**: EasyOCR — thread-safe via lock, GPU-accelerated if available
+- **Fallback 2**: Tesseract — open-source offline fallback
+- Parallel processing via `ThreadPoolExecutor` using all available CPU cores
+- `ThermalThrottler` daemon monitors CPU temp/load, auto-reduces workers if system runs hot
+- GCV client singleton — initialised once, reused across all tiles
+- Output: raw per-tile detections with bounding boxes and confidence scores
 
-#### 3. **Grid Detection** (Local)
-- Identify alphanumeric grid overlay (rows: A/B/C/..., columns: 1/2/3/...)
-- Map each OCR text to nearest grid cell
-- Output: (text, grid_ref, bbox, confidence)
+#### Phase 3 — Grid Detection (`3_grid_detection.py`)
+- Detects alphanumeric grid overlay (rows A/B/C..., columns 1/2/3...)
+- Two methods: OCR-based grid text recognition + image Hough line scan
+- Assigns each detected text to nearest grid cell
+- Output: `grid_detection.json` with (text, grid_ref, bbox, confidence)
 
-#### 4. **LLM Post-Processing** (Cloud: OpenAI OR Gemini)
-- Input: Raw OCR text chunks per grid
-- Tasks:
-  - Fix OCR misspellings (e.g., "Rlver" → "River")
-  - Classify feature type (settlement/waterway/mountain/landmark)
-  - Remove noise (contour labels, scale text, etc.)
-  - Assign final confidence (0-1)
-- Output: Cleaned features with classification
+#### Phase 4 — LLM Cleaning (`4_llm_cleaning.py`) — 7 providers supported
+- Input: raw OCR text chunks
+- Tasks: fix misspellings, classify feature type, remove noise (contour labels, scale text), assign confidence
+- **7 LLM providers** all wired and working:
 
-#### 5. **Database Assembly** (Local)
-- Combine: map_name + feature_name + grid_ref + feature_type + confidence
-- Generate CSV: Map_Name, Feature_Name, Grid_Reference, Feature_Type, Confidence
-- Generate JSON: Nested structure for API integration
-- Store in SQLite for searchable queries
+| Provider | Model | Notes |
+|----------|-------|-------|
+| Vertex AI | gemini-2.5-flash | GCP service account, best quality |
+| Gemini Direct (key 1) | gemini-2.5-flash | Direct API key |
+| Gemini Direct (key 2) | gemini-2.5-flash | Second key for quota |
+| OpenAI | gpt-4o-mini | Reliable paid API |
+| Claude | claude-3-5-haiku | Anthropic API |
+| Grok | grok-3-mini | xAI API |
+| Groq | llama-3.1-8b-instant | Free tier, fast |
 
-#### 6. **Query Interface** (Local)
-- Search examples:
-  - "List all rivers alphabetically across all maps"
-  - "Find features in grid B-3 of map 63-P-14"
-  - "High-confidence settlements (>0.9) in Palamau region"
+- **Ensemble mode**: all 7 run in parallel via `ThreadPoolExecutor`, results merged by majority vote
+- Voting: `feature_type` = plurality vote, `cleaned` = most common text, `confidence` = avg × agreement ratio
+- Country-specific prompts injected per map (India, UK, USA, Germany, France, Pakistan)
+- Incremental: skips maps already cleaned
 
-### Output Files
+#### Phase 5 — Database Assembly (`5_database_assembly.py`)
+- Combines: map_name + feature_name + grid_ref + feature_type + confidence
+- Stores in SQLite (`toposheet.db`) — per-session, fully isolated
+- Exports: `extracted_data.csv` + `extracted_data.json`
+
+#### Export — HTML Results Table (`export_table.py`)
+- Generates a styled HTML table from the session database
+- Auto-runs at end of pipeline
+- Also regenerates on-demand when user clicks View Results (if HTML is missing)
+- Shows: map name, feature name, type, grid ref, confidence
+
+#### Phase 6 — Query Interface (`6_query_interface.py`)
+- Search by feature type, grid reference, map name
+- Examples: "List all rivers", "Find settlements in grid B-3", "High confidence (>0.9) features"
+
+#### Phase 7 — Gold Standard (`7_gold_standard.py`)
+- Random sample of extracted features sent for human review
+- Measures pipeline accuracy
+
+#### Phase 8 — Active Learning (`8_active_learning.py`)
+- Flags low-confidence items for targeted re-review
+- Feeds corrected labels back to improve confidence thresholds
+
+---
+
+## Web Interface (`app.py` — Flask)
+
+### User Flow
 ```
-maps/
-  63-P-14-Palamau-1918-Preliminary-1.jpg
-  ...
-
-results/
-  extracted_data.csv
-  extracted_data.json
-  toposheet.db (SQLite searchable database)
-  
-logs/
-  ocr_results_raw.json (per-tile OCR debug)
-  grid_detection.json (detected grid mappings)
-  llm_corrections.json (LLM cleaning log)
+1. Open localhost:5000
+2. Upload 1 or more map images (JPG/PNG/TIF)
+3. Choose processing model (7 options)
+4. Click "Process Map"
+5. Watch live progress stream: Tiling → OCR → Grid → LLM → Database → Export
+6. Click "View Results" → HTML table of all extracted features
 ```
+
+### Model Options (7)
+| # | Option | LLM | OCR | Notes |
+|---|--------|-----|-----|-------|
+| 1 | Best Quality | Vertex AI Gemini 2.5 Flash | GCV | Default, highest accuracy |
+| 2 | Fast | Groq LLaMA 3.1 8B | GCV | Free, fastest |
+| 3 | All LLMs Together | All 7 in parallel | GCV | Majority vote, most confident |
+| 4 | OpenAI GPT-4o | GPT-4o-mini | GCV | Reliable paid API |
+| 5 | Claude Haiku | Claude 3.5 Haiku | GCV | Anthropic API |
+| 6 | Grok (xAI) | Grok-3-mini | GCV | xAI API |
+| 7 | Offline OCR | Groq LLaMA | EasyOCR | No Google Cloud needed |
+
+### Session Isolation
+- Each upload = unique 12-char session ID (`uuid4().hex[:12]`)
+- All data stored under `maps/<session_id>/`, `results/<session_id>/`, `logs/<session_id>/`
+- Upload 1 map → View Results shows that map's features only
+- Upload 3 maps together → same session → all 3 processed → results show all 3 combined
+- Never mixed with other upload sessions
+
+---
 
 ## Technology Stack
 
-| Component | Technology | Rationale |
-|-----------|-----------|-----------|
-| **Image Tiling** | OpenCV (cv2) | Fast, reliable tile generation |
-| **OCR** | EasyOCR (primary) / Tesseract (fallback) | Proven on historical docs, handles curved text |
-| **Grid Detection** | CV2 contour detection + Hough lines | Identifies printed grid overlays |
-| **LLM** | OpenAI GPT-4 / Google Gemini | Both APIs supported for flexibility |
-| **Database** | SQLite | Lightweight, searchable, no server needed |
-| **Output** | CSV + JSON | Excel-compatible + API-ready |
+| Component | Technology |
+|-----------|-----------|
+| Web Framework | Flask 2.x (threaded, SSE streaming) |
+| Image Tiling | OpenCV (cv2) |
+| OCR Primary | Google Cloud Vision API (singleton client) |
+| OCR Fallback | EasyOCR (thread-safe) + Tesseract |
+| Grid Detection | CV2 contour detection + Hough lines |
+| LLM Providers | Vertex AI, Gemini, OpenAI, Claude, Grok, Groq |
+| Ensemble | ThreadPoolExecutor + majority vote |
+| CPU Throttle | ThermalThrottler daemon (`utils/cpu_utils.py`) |
+| Database | SQLite (per-session) |
+| Output | CSV + JSON + styled HTML table |
+| Country Prompts | India, UK, USA, Germany, France, Pakistan |
 
-## Phase 1: Foundation (Immediate)
-- ✅ Project structure setup
-- ✅ Tiling engine (robust tile generation)
-- ⏳ Dual OCR system (EasyOCR + Tesseract with fallback)
-- ⏳ Grid detection (detect A-1, B-2 layout)
-- ⏳ LLM integration (OpenAI + Gemini wrappers)
+---
 
-## Phase 2: Integration (This week)
-- Combine OCR + Grid mapping
-- LLM post-processing pipeline
-- Database assembly and export (CSV/JSON)
-
-## Phase 3: Query Interface (Next)
-- Search database by feature type, grid, map
-- Export results to spreadsheet
-
-## File Map
+## File Structure
 
 ```
-C:\CV-Toposheet/
-├── PROJECT_PLAN.md (this file)
-├── config.py (API keys, settings)
-├── 1_tile_maps.py (tiling engine)
-├── 2_ocr_extraction.py (local OCR)
-├── 3_grid_detection.py (detect grid overlay)
-├── 4_llm_cleaning.py (cloud LLM post-processing)
-├── 5_database_assembly.py (build database)
-├── 6_query_interface.py (search database)
+C:\CV- Toposheet\
+├── app.py                  Flask web interface (upload, SSE stream, results)
+├── config.py               Central config — loads .env, API keys, paths
+├── process_new_maps.py     Main pipeline runner (phases 1-5)
+├── export_table.py         HTML/CSV results table generator
+├── run_pipeline.py         CLI pipeline runner
+├── 1_tile_maps.py          Phase 1: tiling
+├── 2_ocr_extraction.py     Phase 2: OCR
+├── 3_grid_detection.py     Phase 3: grid detection
+├── 4_llm_cleaning.py       Phase 4: LLM cleaning
+├── 5_database_assembly.py  Phase 5: database
+├── 6_query_interface.py    Phase 6: search CLI
+├── 7_gold_standard.py      Phase 7: human review
+├── 8_active_learning.py    Phase 8: active learning
+├── 9_symbol_detector.py    Symbol/icon detection
 ├── utils/
-│   ├── image_utils.py
-│   ├── ocr_utils.py
-│   ├── llm_utils.py
-│   └── db_utils.py
+│   ├── cpu_utils.py        ThermalThrottler daemon
+│   ├── ocr_utils.py        GCV singleton, EasyOCR thread lock
+│   ├── llm_utils.py        All 7 LLM providers + ensemble voting
+│   └── db_utils.py         SQLite helpers
+├── prompts/
+│   ├── india.txt           Country-specific LLM knowledge prompts
+│   ├── uk.txt
+│   ├── usa.txt
+│   ├── germany.txt
+│   ├── france.txt
+│   ├── pakistan.txt
+│   └── spelling_variants.json
 ├── maps/
-│   ├── 63-P-14-Palamau-1918-Preliminary-1.jpg
-│   ├── 63-P-14-Palamau-District-1955.jpg
-│   └── ... (sample maps)
+│   └── <session_id>/       One folder per upload session
 ├── results/
-│   ├── extracted_data.csv
-│   ├── extracted_data.json
-│   └── toposheet.db
-└── logs/
-    ├── ocr_results_raw.json
-    ├── grid_detection.json
-    └── llm_corrections.json
+│   └── <session_id>/
+│       ├── toposheet.db
+│       ├── extracted_data.csv
+│       ├── extracted_data.json
+│       └── table_export.html
+├── logs/
+│   └── <session_id>/
+│       ├── tiles_manifest.json
+│       ├── ocr_results_raw.json
+│       ├── grid_detection.json
+│       └── llm_corrections.json
+├── .env                    API keys (not in git)
+├── service_account.json    GCP service account — GCV OCR
+├── service_account2.json   GCP service account — Vertex AI
+└── requirements.txt
 ```
+
+---
+
+## API Keys Configured
+
+| Service | Status |
+|---------|--------|
+| GROQ_API_KEY | ✅ |
+| OPENAI_API_KEY | ✅ |
+| GEMINI_API_KEY | ✅ |
+| GEMINI_API_KEY_2 | ✅ |
+| CLAUDE_API_KEY | ✅ |
+| GROK_API_KEY | ✅ |
+| VERTEX_PROJECT (service_account2.json) | ✅ |
+| GCV OCR (service_account.json) | ✅ |
+
+---
 
 ## Key Design Decisions
 
-1. **Hybrid Processing**: Local OCR (no per-API costs) + cloud LLM (best accuracy)
-2. **Dual LLM Support**: OpenAI AND Gemini interchangeable - use env vars to switch
-3. **Tiling (not resizing)**: Preserves text quality; no "squeeze" artifacts
-4. **Modular pipeline**: Each phase can run independently for debugging
-5. **Grid-first approach**: All features tagged with grid before database storage
-
-## Next Steps
-
-1. Install robust OCR dependencies
-2. Build tiling engine
-3. Implement grid detection
-4. Set up LLM wrappers (OpenAI + Gemini)
-5. Test on sample maps
+1. **Session isolation**: every upload is fully independent — own maps, DB, results, logs
+2. **Ensemble voting**: 7 LLMs in parallel, majority vote per feature = highest accuracy
+3. **Tiling not resizing**: preserves full text quality on large maps
+4. **GCV singleton**: initialised once, reused — avoids repeated auth overhead
+5. **ThermalThrottler**: auto-scales workers based on CPU temperature and load
+6. **Incremental pipeline**: each phase skips already-processed maps — safe to re-run after failure
+7. **PYTHONIOENCODING=utf-8**: set in all subprocess calls — prevents Windows encoding crashes
+8. **Country prompts**: injected per map into LLM for region-specific spelling and feature knowledge

@@ -9,9 +9,13 @@
 # Use `throttler.get_workers(ocr_engine)` to get the safe worker count.
 
 import os
+import sys      # use sys.platform — NOT platform.system() which hangs on Windows
 import time
 import threading
-import platform
+# ⚠ DO NOT import the 'platform' module here. platform.system() calls into
+# Windows COM/WMI internals and HANGS indefinitely when called from a
+# subprocess spawned by another Python process (e.g. Flask → pipeline).
+# Always use sys.platform.startswith('win') instead.
 
 try:
     import psutil
@@ -110,7 +114,7 @@ class ThermalThrottler:
         self._poll          = poll_secs
 
         self._high_load_since = None   # monotonic timestamp
-        self._is_win = platform.system() == 'Windows'
+        self._is_win = sys.platform.startswith('win')  # NOT platform.system() — it hangs in subprocesses
 
         t = threading.Thread(target=self._monitor, daemon=True, name='ThermalThrottler')
         t.start()

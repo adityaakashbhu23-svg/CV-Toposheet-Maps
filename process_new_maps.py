@@ -145,8 +145,14 @@ def phase2_ocr(new_maps: list, manifest: dict) -> dict:
 
         # EasyOCR is not thread-safe – serialize for offline mode.
         # For all other engines, use live throttler count (full CPU, reduced if hot).
+        # Cap workers for large maps to prevent OpenBLAS/numpy OOM.
         _ocr_engine = getattr(config, 'OCR_ENGINE', 'gcv')
         workers = _throttler.get_workers(_ocr_engine)
+        tile_count_n = len(tiles_list)
+        if tile_count_n > 60:
+            workers = min(workers, 2)
+        elif tile_count_n > 30:
+            workers = min(workers, 4)
         print(f'  [CPU] {_throttler.status()}')
         with tqdm(total=len(tiles_list), desc='  OCR tiles', unit='tile') as pbar:
             with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -327,6 +333,9 @@ def phase4_llm(new_maps: list, grid_results: dict) -> dict:
 
         if not detections:
             llm_results[map_name] = []
+            # Save so LLM_OUT_PATH always exists even when all maps have 0 detections
+            with open(LLM_OUT_PATH, 'w', encoding='utf-8') as f:
+                json.dump(llm_results, f, ensure_ascii=False, indent=2)
             continue
 
         raw_texts   = [d['text'] for d in detections]
@@ -362,6 +371,11 @@ def phase4_llm(new_maps: list, grid_results: dict) -> dict:
 
     total = sum(len(v) for v in llm_results.values())
     print(f'\n[LLM] Total clean features in file: {total}')
+
+    # Always ensure the file exists so phase5 / build_database never sees a missing file
+    with open(LLM_OUT_PATH, 'w', encoding='utf-8') as f:
+        json.dump(llm_results, f, ensure_ascii=False, indent=2)
+
     return llm_results
 
 
@@ -399,19 +413,45 @@ if __name__ == '__main__':
     t0 = time.time()
 
     # Phase 1 – Tile
-    manifest = phase1_tile(new_maps)
+    try:
+        manifest = phase1_tile(new_maps)
+    except Exception as e:
+        print(f'\n[ERROR] Phase 1 (tiling) crashed: {e}')
+        print('[ERROR] Cannot continue without tiles. Exiting.')
+        sys.exit(1)
 
     # Phase 2 – OCR
-    ocr_results = phase2_ocr(new_maps, manifest)
+    try:
+        ocr_results = phase2_ocr(new_maps, manifest)
+    except Exception as e:
+        print(f'\n[ERROR] Phase 2 (OCR) crashed: {e}')
+        print('[WARN]  Continuing to Phase 3 with empty OCR results.')
+        ocr_results = {}
 
     # Phase 3 – Grid detection
-    grid_results = phase3_grid(new_maps, manifest, ocr_results)
+    try:
+        grid_results = phase3_grid(new_maps, manifest, ocr_results)
+    except Exception as e:
+        print(f'\n[ERROR] Phase 3 (grid detection) crashed: {e}')
+        print('[WARN]  Continuing to Phase 4 with empty grid results.')
+        grid_results = {}
 
     # Phase 4 – LLM cleaning
-    phase4_llm(new_maps, grid_results)
+    try:
+        phase4_llm(new_maps, grid_results)
+    except Exception as e:
+        print(f'\n[ERROR] Phase 4 (LLM cleaning) crashed: {e}')
+        print('[WARN]  Continuing to Phase 5 (database will have 0 features).')
+        # Ensure LLM output file exists so phase5 / build_database doesn't crash
+        if not LLM_OUT_PATH.exists():
+            with open(LLM_OUT_PATH, 'w', encoding='utf-8') as _f:
+                json.dump({}, _f)
 
     # Phase 5 – Rebuild full database
-    phase5_database()
+    try:
+        phase5_database()
+    except Exception as e:
+        print(f'\n[ERROR] Phase 5 (database build) crashed: {e}')
 
     elapsed = time.time() - t0
     print(f'\n{"="*60}')
