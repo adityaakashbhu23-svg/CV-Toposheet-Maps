@@ -1,0 +1,39 @@
+CV-Toposheet is now installed!
+================================
+
+Two things to do after you launch the app:
+
+
+1. ADD YOUR API KEY
+--------------------
+Click [⚙ Settings] on the home page and enter at least
+one API key so the app can process maps:
+
+  * Groq (free)   → https://console.groq.com
+  * Gemini (free) → https://aistudio.google.com/apikey
+  * OpenAI        → https://platform.openai.com/api-keys
+
+Without an API key the app cannot run.
+
+
+2. LOCK YOUR SETTINGS WITH A PIN  [recommended]
+-------------------------------------------------
+To prevent others from viewing or changing your API keys,
+set a 4-digit PIN lock:
+
+  TO LOCK:
+  1. Open the app → click [⚙ Settings]
+  2. Click the 🔓 icon (top-right of the Settings dialog)
+  3. Enter a 4-digit PIN, then confirm it
+  → The icon changes to 🔒. Settings is now protected.
+
+  TO UNLOCK / OPEN SETTINGS:
+  Just click [⚙ Settings] → enter your PIN → it opens.
+
+  TO CHANGE OR REMOVE PIN:
+  Open Settings (enter PIN) → click 🔒 → verify current PIN
+  → enter new PIN twice, or click "Remove PIN" to turn off.
+
+  FORGOT YOUR PIN?
+  Press F12 in the browser → Application → Local Storage
+  → http://127.0.0.1:5000 → delete "cvt_settings_pin".

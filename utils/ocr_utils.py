@@ -45,7 +45,7 @@ def _get_gcv_client():
     return _gcv_client
 
 
-def ocr_tile_gcv(tile: np.ndarray, confidence_threshold: float = 0.3) -> List[Dict]:
+def ocr_tile_gcv(tile: np.ndarray, confidence_threshold: float = 0.3):
     """
     Run Google Cloud Vision DOCUMENT_TEXT_DETECTION on a single tile.
 
@@ -58,19 +58,22 @@ def ocr_tile_gcv(tile: np.ndarray, confidence_threshold: float = 0.3) -> List[Di
     which config.py sets to the absolute path of service_account.json before
     any OCR code runs.
 
-    Returns a list of dicts: {text, confidence, bbox: [x1,y1,x2,y2]}
+    Returns:
+        (results, gcv_failed)
+        results    – list of dicts {text, confidence, bbox}
+        gcv_failed – True only if GCV had an actual API/network error (not just empty tile)
     """
     try:
         from google.cloud import vision as _vision_check  # noqa: just verify installed
     except ImportError:
         print('[OCR/GCV] google-cloud-vision not installed. Run: pip install google-cloud-vision')
-        return []
+        return [], True
 
     # Encode tile as PNG bytes (in-memory, no disk write)
     success, buf = cv2.imencode('.png', tile)
     if not success:
         print('[OCR/GCV] Failed to encode tile as PNG')
-        return []
+        return [], True
     image_bytes = buf.tobytes()
 
     try:
@@ -80,11 +83,11 @@ def ocr_tile_gcv(tile: np.ndarray, confidence_threshold: float = 0.3) -> List[Di
         response = client.document_text_detection(image=image)
     except Exception as e:
         print(f'[OCR/GCV] API error: {e}')
-        return []
+        return [], True  # real error → signal fallback
 
     if response.error.message:
         print(f'[OCR/GCV] Response error: {response.error.message}')
-        return []
+        return [], True  # real error → signal fallback
 
     full_text = response.full_text_annotation
     if not full_text or not full_text.pages:
@@ -121,7 +124,9 @@ def ocr_tile_gcv(tile: np.ndarray, confidence_threshold: float = 0.3) -> List[Di
                         'bbox':       [int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys))],
                     })
 
-    return detections
+    # Empty list is fine — means this tile has no text (terrain, water, etc.)
+    # gcv_failed=False because GCV succeeded, just found nothing
+    return detections, False
 
 
 def ocr_tile_easyocr(tile: np.ndarray, confidence_threshold: float = 0.3) -> List[Dict]:
@@ -214,9 +219,12 @@ def ocr_tile(
     results: List[Dict] = []
 
     if engine == 'gcv':
-        results = ocr_tile_gcv(tile, confidence_threshold)
-        if not results:
-            print('[OCR] GCV returned nothing, falling back to EasyOCR...')
+        results, gcv_failed = ocr_tile_gcv(tile, confidence_threshold)
+        # Only fall back if GCV had a real API/network error — NOT just an empty tile.
+        # Many tiles on a map are legitimately blank (terrain, water, roads).
+        # Falling back to EasyOCR on blank tiles = 30-60s per tile = hours of wasted time.
+        if gcv_failed:
+            print('[OCR] GCV API error — falling back to EasyOCR for this tile...')
             results = ocr_tile_easyocr(tile, confidence_threshold)
     elif engine == 'easyocr':
         results = ocr_tile_easyocr(tile, confidence_threshold)
@@ -226,10 +234,10 @@ def ocr_tile(
         print(f'[OCR] Unknown OCR_ENGINE="{engine}", defaulting to EasyOCR')
         results = ocr_tile_easyocr(tile, confidence_threshold)
 
-    # Final fallback to Tesseract if still empty
-    if not results and use_tesseract_fallback and engine != 'tesseract':
-        print('[OCR] All engines returned nothing, trying Tesseract...')
-        results = ocr_tile_tesseract(tile, confidence_threshold)
+    # Final Tesseract fallback only on real GCV failure (not blank tiles)
+    if not results and use_tesseract_fallback and engine == 'gcv':
+        # only reach here if gcv_failed=True AND easyocr also returned nothing
+        pass  # already fell back above; Tesseract won't add value for blank tiles
 
     return results
 

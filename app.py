@@ -299,6 +299,8 @@ def _stream_gen(filename, model, session_id):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 bufsize=1,
                 env=env,
             )
@@ -556,6 +558,26 @@ body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; backg
 .badge-optional { background:#f0fdf4; color:#166534; }
 .badge-claude  { background:#fae8ff; color:#86198f; }
 .badge-grok    { background:#fff7ed; color:#c2410c; }
+/* PIN Lock */
+.pin-overlay { display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,.55); align-items:center; justify-content:center; z-index:2000; }
+.pin-overlay.open { display:flex; }
+.pin-card { background:#fff; border-radius:14px; box-shadow:0 6px 40px rgba(14,116,144,.30); padding:28px 30px 24px; min-width:300px; max-width:360px; width:90vw; text-align:center; }
+.pin-card h3 { margin:0 0 6px; font-size:1.1em; color:#0E7490; }
+.pin-card p  { margin:0 0 18px; font-size:0.85em; color:#555; }
+.pin-inputs  { display:flex; gap:10px; justify-content:center; margin-bottom:10px; }
+.pin-inputs input { width:48px; height:54px; text-align:center; font-size:1.6em; font-weight:700; border:2px solid #c0d9e4; border-radius:8px; outline:none; transition:border-color .2s; color:#0E7490; }
+.pin-inputs input:focus { border-color:#0E7490; }
+.pin-error  { color:#dc2626; font-size:0.82em; min-height:18px; margin-bottom:8px; }
+.pin-actions { display:flex; gap:10px; justify-content:center; margin-top:14px; }
+.pin-btn  { border:none; border-radius:6px; padding:8px 20px; font-size:0.9em; font-weight:700; cursor:pointer; }
+.pin-btn-cancel { background:#e0e7ef; color:#0E7490; }
+.pin-btn-primary { background:#0E7490; color:#fff; }
+.pin-btn-danger  { background:#fee2e2; color:#dc2626; }
+@keyframes pinShake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-8px)} 40%,80%{transform:translateX(8px)} }
+.pin-shake { animation:pinShake .4s ease; }
+.modal-lock-btn { background:none; border:none; font-size:1.2em; cursor:pointer; padding:0 6px; line-height:1; opacity:.7; }
+.modal-lock-btn:hover { opacity:1; }
+.pin-confirm-label { font-size:0.82em; color:#555; margin:12px 0 6px; }
 .db-banner-btn { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); color:#fff; border-radius:7px; padding:0 16px; height:36px; font-size:0.85em; font-weight:700; cursor:pointer; transition:background .2s; text-decoration:none; display:inline-flex; align-items:center; gap:5px; box-sizing:border-box; }
 .db-banner-btn:hover { background:rgba(255,255,255,.25); }
 .kill-banner-btn { background:#dc2626; border:1px solid #dc2626; color:#fff; border-radius:7px; padding:0 16px; height:36px; font-size:0.85em; font-weight:700; cursor:pointer; transition:background .2s; display:inline-flex; align-items:center; gap:5px; box-sizing:border-box; }
@@ -827,7 +849,13 @@ function showPreviews() {
 // Settings modal
 const SECTION_IDS = ['llm','google','vertex'];
 
-function openSettings() {
+// ── PIN Lock ──────────────────────────────────────────────────────────────
+const PIN_KEY = 'cvt_settings_pin';
+function _getPin()   { return localStorage.getItem(PIN_KEY) || ''; }
+function _savePin(p) { localStorage.setItem(PIN_KEY, p); }
+function _clearPin() { localStorage.removeItem(PIN_KEY); }
+
+function _loadSettingsData() {
   fetch('/get_env').then(r => r.json()).then(data => {
     for (const [k, v] of Object.entries(data)) {
       const inp = document.getElementById('inp_' + k);
@@ -835,6 +863,12 @@ function openSettings() {
     }
   }).catch(() => {});
   document.getElementById('settingsModal').classList.add('open');
+  _updateLockBtn();
+}
+
+function openSettings() {
+  if (_getPin()) { _showPinEntry(); }
+  else           { _loadSettingsData(); }
 }
 
 function closeSettings() {
@@ -873,17 +907,181 @@ function showAllSections() {
   });
 }
 
-document.getElementById('settingsModal').addEventListener('click', function(e) {
-  if (e.target === this) closeSettings();
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('settingsModal').addEventListener('click', function(e) {
+    if (e.target === this) closeSettings();
+  });
 });
-</script>
+
+// ── PIN helpers ──────────────────────────────────────────────────────────
+function _clearBoxes(prefix) {
+  for (let i = 0; i < 4; i++) { const el = document.getElementById(prefix+i); if(el) el.value=''; }
+}
+function _readBoxes(prefix) {
+  return [0,1,2,3].map(i => { const el=document.getElementById(prefix+i); return el ? el.value : ''; }).join('');
+}
+function _pinNav(e, prefix, idx, onComplete) {
+  if (e.key === 'Backspace') {
+    e.preventDefault(); e.target.value = '';
+    if (idx > 0) document.getElementById(prefix+(idx-1)).focus();
+    return;
+  }
+  if (!/^[0-9]$/.test(e.key)) { e.preventDefault(); return; }
+  e.preventDefault(); e.target.value = e.key;
+  if (idx < 3) { document.getElementById(prefix+(idx+1)).focus(); }
+  else { setTimeout(onComplete, 60); }
+}
+
+// ── PIN Entry modal (gate before settings opens) ──────────────────────────
+function _showPinEntry() {
+  const m = document.getElementById('pinEntryModal');
+  document.body.appendChild(m);
+  _clearBoxes('pe');
+  document.getElementById('pinEntryError').textContent = '';
+  m.classList.add('open');
+  setTimeout(() => document.getElementById('pe0').focus(), 50);
+}
+function _closePinEntry() { document.getElementById('pinEntryModal').classList.remove('open'); }
+function _submitPinEntry() {
+  const v = _readBoxes('pe');
+  if (v.length < 4) return;
+  if (v === _getPin()) { _closePinEntry(); _loadSettingsData(); }
+  else {
+    const c = document.getElementById('pinEntryCard');
+    c.classList.add('pin-shake'); setTimeout(() => c.classList.remove('pin-shake'), 450);
+    document.getElementById('pinEntryError').textContent = 'Incorrect PIN. Try again.';
+    _clearBoxes('pe'); setTimeout(() => document.getElementById('pe0').focus(), 50);
+  }
+}
+
+// ── PIN Setup modal (set / change / remove) ───────────────────────────────
+// _pinStep: 'verify' | 'new' | 'confirm'
+let _pinStep = '', _pinFirst = '';
+function openPinSetup() {
+  const m = document.getElementById('pinSetupModal');
+  document.body.appendChild(m);
+  _pinFirst = '';
+  const hasPin = !!_getPin();
+  _pinStep = hasPin ? 'verify' : 'new';
+  _clearBoxes('px');
+  document.getElementById('pinSetupError').textContent = '';
+  document.getElementById('pinRemoveBtn').style.display = 'none';
+  if (!hasPin) {
+    document.getElementById('pinSetupTitle').textContent = '🔒 Set PIN Lock';
+    document.getElementById('pinSetupDesc').textContent  = 'Enter a 4-digit PIN';
+  } else {
+    document.getElementById('pinSetupTitle').textContent = '🔒 Change PIN';
+    document.getElementById('pinSetupDesc').textContent  = 'Enter your current PIN';
+  }
+  m.classList.add('open');
+  setTimeout(() => document.getElementById('px0').focus(), 50);
+}
+function closePinSetup() { document.getElementById('pinSetupModal').classList.remove('open'); }
+function removePin() { _clearPin(); closePinSetup(); _updateLockBtn(); _showSettingsToast('PIN removed.'); }
+function _pinSetupNext() {
+  const v = _readBoxes('px');
+  if (v.length < 4) return;
+  const err = document.getElementById('pinSetupError');
+  const card = document.getElementById('pinSetupCard');
+  function shake() { card.classList.add('pin-shake'); setTimeout(()=>card.classList.remove('pin-shake'),450); }
+
+  if (_pinStep === 'verify') {
+    if (v !== _getPin()) {
+      err.textContent = 'Incorrect PIN.'; shake();
+      _clearBoxes('px'); setTimeout(() => document.getElementById('px0').focus(), 50);
+      return;
+    }
+    _pinStep = 'new'; err.textContent = '';
+    _clearBoxes('px');
+    document.getElementById('pinSetupTitle').textContent = '🔒 Set New PIN';
+    document.getElementById('pinSetupDesc').textContent  = 'Enter a new 4-digit PIN';
+    document.getElementById('pinRemoveBtn').style.display = 'inline-block';
+    setTimeout(() => document.getElementById('px0').focus(), 50);
+
+  } else if (_pinStep === 'new') {
+    _pinFirst = v; _pinStep = 'confirm'; err.textContent = '';
+    _clearBoxes('px');
+    document.getElementById('pinSetupTitle').textContent = '🔒 Confirm PIN';
+    document.getElementById('pinSetupDesc').textContent  = 'Enter the PIN again to confirm';
+    setTimeout(() => document.getElementById('px0').focus(), 50);
+
+  } else if (_pinStep === 'confirm') {
+    if (v !== _pinFirst) {
+      err.textContent = 'PINs do not match — try again.'; shake();
+      _pinStep = 'new'; _pinFirst = '';
+      _clearBoxes('px');
+      document.getElementById('pinSetupTitle').textContent = '🔒 Set PIN Lock';
+      document.getElementById('pinSetupDesc').textContent  = 'Enter a 4-digit PIN';
+      setTimeout(() => document.getElementById('px0').focus(), 50);
+      return;
+    }
+    _savePin(v); closePinSetup(); _updateLockBtn(); _showSettingsToast('PIN lock set ✓');
+  }
+}
+function _updateLockBtn() {
+  const btn = document.getElementById('pinLockBtn');
+  if (!btn) return;
+  const has = !!_getPin();
+  btn.textContent = has ? '🔒' : '🔓';
+  btn.title = has ? 'PIN lock ON — click to change/remove' : 'No PIN — click to set lock';
+}
+function _showSettingsToast(msg) {
+  const n = document.getElementById('saveNotice');
+  if (!n) return;
+  n.style.display = 'flex';
+  const sp = n.querySelector('span');
+  if (sp) sp.textContent = msg; else n.textContent = msg;
+  setTimeout(() => n.style.display = 'none', 2500);
+}
+// Init lock icon on page load
+window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
+
+<!-- PIN Entry Modal (gate before settings opens when PIN is set) -->
+<div class="pin-overlay" id="pinEntryModal">
+  <div class="pin-card" id="pinEntryCard">
+    <h3>🔒 Settings Locked</h3>
+    <p>Enter your 4-digit PIN to open Settings</p>
+    <div class="pin-inputs">
+      <input type="password" inputmode="numeric" maxlength="1" id="pe0" onkeydown="_pinNav(event,'pe',0,_submitPinEntry)">
+      <input type="password" inputmode="numeric" maxlength="1" id="pe1" onkeydown="_pinNav(event,'pe',1,_submitPinEntry)">
+      <input type="password" inputmode="numeric" maxlength="1" id="pe2" onkeydown="_pinNav(event,'pe',2,_submitPinEntry)">
+      <input type="password" inputmode="numeric" maxlength="1" id="pe3" onkeydown="_pinNav(event,'pe',3,_submitPinEntry)">
+    </div>
+    <div class="pin-error" id="pinEntryError"></div>
+    <div class="pin-actions">
+      <button class="pin-btn pin-btn-cancel" onclick="_closePinEntry()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- PIN Setup Modal (set / change / remove) -->
+<div class="pin-overlay" id="pinSetupModal">
+  <div class="pin-card" id="pinSetupCard">
+    <h3 id="pinSetupTitle">🔒 Set PIN Lock</h3>
+    <p id="pinSetupDesc">Enter a 4-digit PIN</p>
+    <div class="pin-inputs">
+      <input type="password" inputmode="numeric" maxlength="1" id="px0" onkeydown="_pinNav(event,'px',0,_pinSetupNext)">
+      <input type="password" inputmode="numeric" maxlength="1" id="px1" onkeydown="_pinNav(event,'px',1,_pinSetupNext)">
+      <input type="password" inputmode="numeric" maxlength="1" id="px2" onkeydown="_pinNav(event,'px',2,_pinSetupNext)">
+      <input type="password" inputmode="numeric" maxlength="1" id="px3" onkeydown="_pinNav(event,'px',3,_pinSetupNext)">
+    </div>
+    <div class="pin-error" id="pinSetupError"></div>
+    <div class="pin-actions">
+      <button class="pin-btn pin-btn-cancel" onclick="closePinSetup()">Cancel</button>
+      <button class="pin-btn pin-btn-danger" id="pinRemoveBtn" onclick="removePin()" style="display:none">Remove PIN</button>
+    </div>
+  </div>
+</div>
 
 <!-- Settings Modal -->
 <div class="modal-overlay" id="settingsModal">
   <div class="modal-card">
     <div class="modal-header">
       <h2>&#9881; API Key Settings</h2>
-      <button class="modal-close" onclick="closeSettings()">&#x2715;</button>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <button class="modal-lock-btn" id="pinLockBtn" onclick="event.stopPropagation(); openPinSetup()" title="Set PIN lock">🔓</button>
+        <button class="modal-close" onclick="closeSettings()">&#x2715;</button>
+      </div>
     </div>
     <div class="modal-body">
       <button class="show-all-btn" onclick="showAllSections()">Show All Sections</button>

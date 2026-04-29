@@ -1,0 +1,99 @@
+; _build/installer.iss  --  Inno Setup script for CV-Toposheet
+;
+; STEP 1: Build the exe first:
+;           double-click  _build\build_exe.bat
+;
+; STEP 2: Open this file in Inno Setup → Ctrl+F9
+;
+; OUTPUT:  _build\CVToposheet_Setup.exe
+
+#define AppName        "CV-Toposheet"
+#define AppVersion     "1.0"
+#define AppPublisher   "Aditya Akash"
+#define AppDescription "Historical Survey of India - Map Digitization System"
+#define AppURL         "http://127.0.0.1:5000"
+#define AppExeName     "CVToposheet.exe"
+#define AppCopyright   "Copyright (C) 2026 Aditya Akash. Academic & Research Use Only."
+#define DistDir        "..\dist\CVToposheet"
+
+[Setup]
+AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
+AppName={#AppName}
+AppVersion={#AppVersion}
+AppVerName={#AppName} {#AppVersion}
+AppPublisher={#AppPublisher}
+AppPublisherURL={#AppURL}
+AppSupportURL={#AppURL}
+AppUpdatesURL={#AppURL}
+AppCopyright={#AppCopyright}
+AppComments={#AppDescription}
+VersionInfoVersion={#AppVersion}
+VersionInfoCompany={#AppPublisher}
+VersionInfoDescription={#AppDescription}
+VersionInfoCopyright={#AppCopyright}
+VersionInfoProductName={#AppName}
+VersionInfoProductVersion={#AppVersion}
+DefaultDirName={autopf}\{#AppName}
+DefaultGroupName={#AppName}
+AllowNoIcons=yes
+; License shown during install
+LicenseFile=LICENSE.txt
+; App description shown BEFORE install
+InfoBeforeFile=ABOUT.txt
+; API keys instructions shown AFTER install
+InfoAfterFile=AFTER_INSTALL.txt
+; Output
+OutputDir=.
+OutputBaseFilename=CVToposheet_Setup
+Compression=lzma2/ultra64
+SolidCompression=yes
+WizardStyle=modern
+MinVersion=10.0
+PrivilegesRequiredOverridesAllowed=dialog
+ShowLanguageDialog=no
+DisableProgramGroupPage=yes
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Tasks]
+Name: "desktopicon";  Description: "Create a &desktop shortcut";           GroupDescription: "Additional icons:"
+Name: "startupentry"; Description: "Launch automatically at &startup (optional)"; GroupDescription: "Startup:"; Flags: unchecked
+
+[Files]
+; Python runtime + all app files (no Python needed on target PC)
+Source: "{#DistDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Ship the license and info files inside the app folder too
+Source: "LICENSE.txt";       DestDir: "{app}"; Flags: ignoreversion
+Source: "ABOUT.txt";         DestDir: "{app}"; Flags: ignoreversion
+Source: "AFTER_INSTALL.txt"; DestDir: "{app}"; Flags: ignoreversion
+
+[Icons]
+Name: "{group}\{#AppName}";             Filename: "{app}\{#AppExeName}"; Comment: "{#AppDescription}"
+Name: "{group}\About CV-Toposheet";     Filename: "{app}\ABOUT.txt"
+Name: "{group}\API Keys Setup Guide";   Filename: "{app}\AFTER_INSTALL.txt"
+Name: "{group}\License";                Filename: "{app}\LICENSE.txt"
+Name: "{group}\Uninstall {#AppName}";   Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#AppName}";       Filename: "{app}\{#AppExeName}"; Comment: "{#AppDescription}"; Tasks: desktopicon
+
+[Run]
+; Launch app after install (optional tick-box on final page)
+Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName} now (browser will open at http://127.0.0.1:5000)"; \
+    Flags: nowait postinstall skipifsilent
+
+[Registry]
+; Store app info in registry (shows in Add/Remove Programs details)
+Root: HKLM; Subkey: "Software\{#AppPublisher}\{#AppName}"; \
+    ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; \
+    Flags: uninsdeletekey
+; Optional auto-startup
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
+    ValueType: string; ValueName: "{#AppName}"; \
+    ValueData: """{app}\{#AppExeName}"""; \
+    Flags: uninsdeletevalue; Tasks: startupentry
+
+[UninstallDelete]
+; Uncomment below to also remove user data on uninstall:
+; Type: filesandordirs; Name: "{app}\results"
+; Type: filesandordirs; Name: "{app}\maps"
+; Type: filesandordirs; Name: "{app}\logs"

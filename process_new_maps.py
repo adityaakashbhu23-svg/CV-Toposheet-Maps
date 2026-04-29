@@ -144,16 +144,21 @@ def phase2_ocr(new_maps: list, manifest: dict) -> dict:
             return translate_bbox_to_global(detections, x, y)
 
         # EasyOCR is not thread-safe – serialize for offline mode.
-        # For all other engines, use live throttler count (full CPU, reduced if hot).
-        # Cap workers for large maps to prevent OpenBLAS/numpy OOM.
+        # GCV is a remote cloud API — no local CPU/RAM strain, so allow more parallelism.
+        # For local engines (easyocr/tesseract) cap workers to prevent OOM.
         _ocr_engine = getattr(config, 'OCR_ENGINE', 'gcv')
         workers = _throttler.get_workers(_ocr_engine)
         tile_count_n = len(tiles_list)
-        if tile_count_n > 60:
-            workers = min(workers, 2)
-        elif tile_count_n > 30:
-            workers = min(workers, 4)
-        print(f'  [CPU] {_throttler.status()}')
+        if _ocr_engine == 'gcv':
+            # GCV: cap at 8 concurrent requests (safe for free/paid GCV quota)
+            workers = min(workers, 8)
+        else:
+            # Local engines: cap to avoid OpenBLAS/numpy OOM on large maps
+            if tile_count_n > 60:
+                workers = min(workers, 2)
+            elif tile_count_n > 30:
+                workers = min(workers, 4)
+        print(f'  [CPU] {_throttler.status()}  ocr_workers={workers}')
         with tqdm(total=len(tiles_list), desc='  OCR tiles', unit='tile') as pbar:
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 futures = {pool.submit(_process_tile, t): t for t in tiles_list}
