@@ -38,6 +38,7 @@ _MODEL_ENVS = {
     'openai':   {'LLM_PROVIDER': 'openai',  'OCR_ENGINE': 'gcv'},
     'claude':   {'LLM_PROVIDER': 'claude',  'OCR_ENGINE': 'gcv'},
     'grok':     {'LLM_PROVIDER': 'grok',    'OCR_ENGINE': 'gcv'},
+    'gemini':   {'LLM_PROVIDER': 'gemini',  'OCR_ENGINE': 'gcv'},
     'offline':  {'LLM_PROVIDER': 'groq',    'OCR_ENGINE': 'easyocr', 'OCR_WORKERS': '1'},
 }
 
@@ -152,6 +153,28 @@ def index():
     except Exception:
         map_count = 0
     return _landing_html(feat_count, map_count)
+
+
+@app.route('/upload_service_account', methods=['POST'])
+def upload_service_account():
+    f = request.files.get('json_file')
+    target = request.form.get('target', 'service_account.json')
+    # Only allow safe filenames — must end in .json, no path traversal
+    if not f or not f.filename.endswith('.json'):
+        return json.dumps({'ok': False, 'error': 'Not a JSON file'}), 400
+    safe_name = Path(target).name  # strip any path component
+    if not safe_name.endswith('.json'):
+        safe_name = 'service_account.json'
+    dest = BASE_DIR / safe_name
+    f.save(str(dest))
+    # Update env so it takes effect immediately
+    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(dest)
+    try:
+        _write_env({'GOOGLE_APPLICATION_CREDENTIALS': safe_name})
+        import config; importlib.reload(config)
+    except Exception:
+        pass
+    return json.dumps({'ok': True, 'saved': safe_name})
 
 
 @app.route('/save_env', methods=['POST'])
@@ -501,9 +524,12 @@ body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; backg
 .mc-body { flex:1; }
 .mc-body .mc-name { font-size:0.68em; font-weight:700; color:#1e3a4a; display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
 .mc-body .mc-desc { font-size:0.55em; color:#6b8a99; margin-top:0px; line-height:1.2; }
+.mc-key { display:inline; font-size:1em; font-weight:600; background:#e0f2f7; border:1px solid #b8dde8; border-radius:3px; padding:0 3px; color:#0e7490; letter-spacing:.01em; }
 .badge { display:inline-block; border-radius:3px; padding:0px 4px; font-size:0.58em; font-weight:700; }
 .badge-best    { background:#d0f0f7; color:#0e7490; }
 .badge-fast    { background:#fef9c3; color:#a16207; }
+.badge-gemini  { background:#e8f5e9; color:#2e7d32; }
+.badge-gemini  { background:#e8f5e9; color:#2e7d32; }
 .badge-offline { background:#ede9fe; color:#6d28d9; }
 .model-card.selected { border-color:#0e7490; border-width:1.5px; background:#e8f5f9; box-shadow:0 0 0 2px rgba(14,116,144,.10); }
 .divider { flex-shrink:0; min-height:4px; max-height:8px; }
@@ -554,6 +580,16 @@ body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; backg
 .btn-cancel { background:#e0e7ef; color:#0E7490; border:none; border-radius:6px; padding:8px 18px; font-size:0.95em; font-weight:700; cursor:pointer; }
 .btn-save { background:#0E7490; color:#fff; border:none; border-radius:6px; padding:8px 18px; font-size:0.95em; font-weight:700; cursor:pointer; }
 .show-all-btn { background:none; border:none; color:#0E7490; font-weight:700; cursor:pointer; font-size:0.85em; margin-bottom:10px; text-decoration:underline; }
+.upload-json-row { display:flex; flex-direction:column; gap:6px; padding:8px 12px; border-bottom:1px solid #e0e7ef; }
+.upload-json-row label { font-size:0.82em; color:#334; font-weight:600; }
+.upload-json-row .upload-hint { font-size:0.75em; color:#888; }
+.upload-json-btn { background:#0e7490; color:#fff; border:none; border-radius:5px; padding:5px 12px; font-size:0.8em; font-weight:700; cursor:pointer; }
+.upload-json-btn:hover { background:#0891b2; }
+.upload-status { font-size:0.78em; margin-top:2px; }
+.custom-key-add-row { display:flex; gap:6px; padding:8px 12px; }
+.custom-key-add-row input { flex:1; border:1px solid #cdd; border-radius:5px; padding:5px 8px; font-size:0.82em; }
+.custom-key-add-btn { background:#0e7490; color:#fff; border:none; border-radius:5px; padding:5px 12px; font-size:0.82em; font-weight:700; cursor:pointer; white-space:nowrap; }
+.custom-key-add-btn:hover { background:#0891b2; }
 .badge-premium { background:#fef3c7; color:#92400e; }
 .badge-optional { background:#f0fdf4; color:#166534; }
 .badge-claude  { background:#fae8ff; color:#86198f; }
@@ -718,11 +754,11 @@ body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; backg
           <div class="mc-desc">GCV OCR + Grok-3-mini<br>Fast inference, xAI API</div>
         </div>
       </label>
-      <label class="model-card" onclick="selectCard(this)" data-model="offline">
-        <input type="radio" name="model_sel" value="offline">
+      <label class="model-card" onclick="selectCard(this)" data-model="gemini">
+        <input type="radio" name="model_sel" value="gemini">
         <div class="mc-body">
-          <div class="mc-name">7. Offline OCR <span class="badge badge-offline">NO GOOGLE</span></div>
-          <div class="mc-desc">EasyOCR + Groq LLaMA 3.1<br>No Google Cloud needed</div>
+          <div class="mc-name">7. Gemini API <span class="badge badge-gemini">GEMINI KEY</span></div>
+          <div class="mc-desc">GCV OCR + Gemini 2.5 Flash<br>Google AI Studio, Gemini API key</div>
         </div>
       </label>
       <div class="info-strip" id="modelInfo">
@@ -746,6 +782,7 @@ const MODEL_INFO = {
   openai:   '<b>OpenAI GPT-4o:</b> Parallel GCV OCR + GPT-4o-mini. 80 items/batch. Reliable paid OpenAI API.',
   claude:   '<b>Claude Haiku:</b> Parallel GCV OCR + Claude 3.5 Haiku. Strong reasoning. Anthropic API key required.',
   grok:     '<b>Grok (xAI):</b> Parallel GCV OCR + Grok-3-mini. Fast xAI inference. xAI API key required.',
+  gemini:   '<b>Gemini API:</b> Google Cloud Vision OCR + Gemini (API key). Uses GEMINI_API_KEY from .env — no Vertex AI or GCP billing needed.',
   offline:  '<b>Offline OCR:</b> EasyOCR (local, no Google Cloud) + Groq LLaMA. Sequential OCR tiles – slower but no GCP needed.',
 };
 
@@ -847,7 +884,7 @@ function showPreviews() {
 }
 
 // Settings modal
-const SECTION_IDS = ['llm','google','vertex'];
+const SECTION_IDS = ['llm','google','vertex','models','custom'];
 
 // ── PIN Lock ──────────────────────────────────────────────────────────────
 const PIN_KEY = 'cvt_settings_pin';
@@ -888,13 +925,49 @@ function saveSettings() {
   }).then(r => r.json()).then(() => {
     const notice = document.getElementById('saveNotice');
     notice.style.display = 'flex';
-    setTimeout(() => notice.style.display = 'none', 2500);
+    setTimeout(() => { notice.style.display = 'none'; closeSettings(); }, 1200);
   });
 }
 
 function toggleEye(key) {
   const inp = document.getElementById('inp_' + key);
   inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+function uploadJsonFile(inputId, targetName, statusId) {
+  const fileInput = document.getElementById(inputId);
+  const statusEl = document.getElementById(statusId);
+  if (!fileInput.files.length) { statusEl.style.color='#c00'; statusEl.textContent='No file selected.'; return; }
+  const fd = new FormData();
+  fd.append('json_file', fileInput.files[0]);
+  fd.append('target', targetName);
+  statusEl.style.color='#888'; statusEl.textContent='Uploading...';
+  fetch('/upload_service_account', { method:'POST', body:fd })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) { statusEl.style.color='#16a34a'; statusEl.textContent='\u2713 Saved as ' + d.saved; }
+      else      { statusEl.style.color='#c00';     statusEl.textContent='Error: ' + (d.error||'failed'); }
+    }).catch(() => { statusEl.style.color='#c00'; statusEl.textContent='Upload failed.'; });
+}
+
+function addCustomKeyRow() {
+  const name = document.getElementById('custom_key_name').value.trim().toUpperCase().replace(/[^A-Z0-9_]/g,'');
+  const val  = document.getElementById('custom_key_value').value.trim();
+  if (!name) { document.getElementById('custom_key_name').focus(); return; }
+  // Avoid duplicates
+  if (document.getElementById('inp_' + name)) { alert('Key "' + name + '" already exists above.'); return; }
+  const container = document.getElementById('custom_key_rows');
+  const row = document.createElement('div'); row.className = 'key-row'; row.id = 'custom_row_' + name;
+  row.innerHTML = `<label style="font-size:0.82em;min-width:160px;">${name}</label>
+    <div class="key-row-input">
+      <input type="password" id="inp_${name}" class="key-row-input" value="${val.replace(/"/g,'&quot;')}" style="flex:1;border:1px solid #cdd;border-radius:5px;padding:5px 8px;font-size:0.82em;">
+      <button class="eye-btn" onclick="toggleEye('${name}')">&#128065;</button>
+      <button class="eye-btn" style="color:#c00;" onclick="document.getElementById('custom_row_${name}').remove()" title="Remove">&#10005;</button>
+    </div>`;
+  container.appendChild(row);
+  document.getElementById('custom_key_name').value = '';
+  document.getElementById('custom_key_value').value = '';
+  document.getElementById('custom_key_name').focus();
 }
 
 function toggleSection(id) {
@@ -1132,6 +1205,46 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
         </div>
       </div>
 
+      <div class="key-section collapsed" id="key_section_models">
+        <div class="key-section-title" onclick="toggleSection('models')">Model Versions</div>
+        <div class="key-row">
+          <label>Groq Model</label>
+          <div class="key-row-input">
+            <input type="text" id="inp_GROQ_MODEL" placeholder="llama-3.1-8b-instant">
+          </div>
+        </div>
+        <div class="key-row">
+          <label>Gemini Model</label>
+          <div class="key-row-input">
+            <input type="text" id="inp_GEMINI_MODEL" placeholder="gemini-2.5-flash">
+          </div>
+        </div>
+        <div class="key-row">
+          <label>OpenAI Model</label>
+          <div class="key-row-input">
+            <input type="text" id="inp_OPENAI_MODEL" placeholder="gpt-4o-mini">
+          </div>
+        </div>
+        <div class="key-row">
+          <label>Claude Model</label>
+          <div class="key-row-input">
+            <input type="text" id="inp_CLAUDE_MODEL" placeholder="claude-3-5-haiku-20241022">
+          </div>
+        </div>
+        <div class="key-row">
+          <label>Grok Model</label>
+          <div class="key-row-input">
+            <input type="text" id="inp_GROK_MODEL" placeholder="grok-3-mini">
+          </div>
+        </div>
+        <div class="key-row">
+          <label>Vertex AI Model</label>
+          <div class="key-row-input">
+            <input type="text" id="inp_VERTEX_MODEL" placeholder="gemini-2.5-flash">
+          </div>
+        </div>
+      </div>
+
       <div class="key-section" id="key_section_google">
         <div class="key-section-title" onclick="toggleSection('google')">Google Cloud</div>
         <div class="key-row">
@@ -1144,8 +1257,26 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
         <div class="key-row">
           <label>Service Account JSON Path</label>
           <div class="key-row-input">
-            <input type="text" id="inp_GOOGLE_APPLICATION_CREDENTIALS" placeholder="C:/path/to/service_account.json">
+            <input type="text" id="inp_GOOGLE_APPLICATION_CREDENTIALS" placeholder="service_account.json">
           </div>
+        </div>
+        <div class="upload-json-row">
+          <label>Upload GCP Service Account JSON (OCR)</label>
+          <span class="upload-hint">Replaces <b>service_account.json</b> — used for Google Cloud Vision OCR</span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="file" id="gcv_json_file" accept=".json" style="font-size:0.8em;flex:1;">
+            <button class="upload-json-btn" onclick="uploadJsonFile('gcv_json_file','service_account.json','gcv_upload_status')">Upload</button>
+          </div>
+          <span class="upload-status" id="gcv_upload_status"></span>
+        </div>
+        <div class="upload-json-row">
+          <label>Upload GCP Service Account JSON (Vertex AI)</label>
+          <span class="upload-hint">Replaces <b>service_account2.json</b> — used for Vertex AI (Best Quality mode)</span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="file" id="vertex_json_file" accept=".json" style="font-size:0.8em;flex:1;">
+            <button class="upload-json-btn" onclick="uploadJsonFile('vertex_json_file','service_account2.json','vertex_upload_status')">Upload</button>
+          </div>
+          <span class="upload-status" id="vertex_upload_status"></span>
         </div>
       </div>
 
@@ -1163,14 +1294,17 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
             <input type="text" id="inp_VERTEX_LOCATION" placeholder="us-central1">
           </div>
         </div>
-        <div class="key-row">
-          <label>Model</label>
-          <div class="key-row-input">
-            <input type="text" id="inp_VERTEX_MODEL" placeholder="gemini-1.5-pro">
-          </div>
-        </div>
       </div>
 
+      <div class="key-section" id="key_section_custom">
+        <div class="key-section-title" onclick="toggleSection('custom')">Custom / Extra API Keys</div>
+        <div id="custom_key_rows"></div>
+        <div class="custom-key-add-row">
+          <input type="text" id="custom_key_name" placeholder="ENV_VARIABLE_NAME" style="text-transform:uppercase;">
+          <input type="password" id="custom_key_value" placeholder="value">
+          <button class="custom-key-add-btn" onclick="addCustomKeyRow()">+ Add</button>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <span class="save-notice" id="saveNotice">&#10003; Saved to .env</span>
