@@ -28,7 +28,8 @@ def _detect_country_from_ocr() -> str:
     ocr_path = config.LOGS_FOLDER / 'ocr_results_raw.json'
     if ocr_path.exists():
         try:
-            data = json.load(open(ocr_path, encoding='utf-8'))
+            with open(ocr_path, encoding='utf-8') as _f:
+                data = json.load(_f)
             country = llm_utils.detect_country(data, fallback=config.MAP_COUNTRY)
             return country
         except Exception:

@@ -91,7 +91,7 @@ def ocr_tile_gcv(tile: np.ndarray, confidence_threshold: float = 0.3):
 
     full_text = response.full_text_annotation
     if not full_text or not full_text.pages:
-        return []
+        return [], False  # blank tile — GCV succeeded, just no text
 
     detections = []
 

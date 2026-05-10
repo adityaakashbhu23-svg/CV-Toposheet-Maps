@@ -8,13 +8,14 @@
 ; OUTPUT:  _build\CVToposheet_Setup.exe
 
 #define AppName        "CV-Toposheet"
-#define AppVersion     "1.0"
+#define AppVersion     "1.0.0"
 #define AppPublisher   "Aditya Akash"
-#define AppDescription "Historical Survey of India - Map Digitization System"
-#define AppURL         "http://127.0.0.1:5000"
+#define AppDescription "AI-Powered Historical Toposheet Digitization System"
+#define AppURL         "https://github.com/adityaakash/cv-toposheet"
 #define AppExeName     "CVToposheet.exe"
-#define AppCopyright   "Copyright (C) 2026 Aditya Akash. Academic & Research Use Only."
-#define DistDir        "..\dist\CVToposheet"
+#define AppCopyright   "Copyright (C) 2026 Aditya Akash. Licensed under GNU GPLv3."
+#define DistDir        "dist\CVToposheet"
+#define IconFile       "app_icon.ico"
 
 [Setup]
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
@@ -25,6 +26,8 @@ AppPublisher={#AppPublisher}
 AppPublisherURL={#AppURL}
 AppSupportURL={#AppURL}
 AppUpdatesURL={#AppURL}
+AppReadMeFile={app}\ABOUT.txt
+AppContact=Aditya Akash
 AppCopyright={#AppCopyright}
 AppComments={#AppDescription}
 VersionInfoVersion={#AppVersion}
@@ -33,6 +36,7 @@ VersionInfoDescription={#AppDescription}
 VersionInfoCopyright={#AppCopyright}
 VersionInfoProductName={#AppName}
 VersionInfoProductVersion={#AppVersion}
+VersionInfoTextVersion={#AppVersion}
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 AllowNoIcons=yes
@@ -45,6 +49,9 @@ InfoAfterFile=AFTER_INSTALL.txt
 ; Output
 OutputDir=.
 OutputBaseFilename=CVToposheet_Setup
+; App icon (used on installer wizard, desktop shortcut, Add/Remove Programs)
+SetupIconFile={#IconFile}
+WizardSmallImageFile={#IconFile}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -67,14 +74,16 @@ Source: "{#DistDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs cr
 Source: "LICENSE.txt";       DestDir: "{app}"; Flags: ignoreversion
 Source: "ABOUT.txt";         DestDir: "{app}"; Flags: ignoreversion
 Source: "AFTER_INSTALL.txt"; DestDir: "{app}"; Flags: ignoreversion
+; App icon — used by shortcuts
+Source: "{#IconFile}";   DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#AppName}";             Filename: "{app}\{#AppExeName}"; Comment: "{#AppDescription}"
+Name: "{group}\{#AppName}";             Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\{#IconFile}"; Comment: "{#AppDescription}"
 Name: "{group}\About CV-Toposheet";     Filename: "{app}\ABOUT.txt"
 Name: "{group}\API Keys Setup Guide";   Filename: "{app}\AFTER_INSTALL.txt"
 Name: "{group}\License";                Filename: "{app}\LICENSE.txt"
 Name: "{group}\Uninstall {#AppName}";   Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#AppName}";       Filename: "{app}\{#AppExeName}"; Comment: "{#AppDescription}"; Tasks: desktopicon
+Name: "{autodesktop}\{#AppName}";       Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\{#IconFile}"; Comment: "{#AppDescription}"; Tasks: desktopicon
 
 [Run]
 ; Launch app after install (optional tick-box on final page)

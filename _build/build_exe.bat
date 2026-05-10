@@ -10,7 +10,7 @@ echo    CV-Toposheet  -  Build Standalone EXE
 echo    All build files are isolated inside _build\
 echo  ====================================================
 echo.
-echo  Output:  dist\CVToposheet\CVToposheet.exe
+echo  Output:  _build\dist\CVToposheet\CVToposheet.exe
 echo  Your project files are NOT touched.
 echo.
 
@@ -39,7 +39,7 @@ echo  Building...  (first run can take 5-15 min -- easyocr/torch are large)
 echo.
 python -m PyInstaller _build\build_exe.spec --clean --noconfirm ^
     --workpath _build\work ^
-    --distpath dist
+    --distpath _build\dist
 
 if errorlevel 1 (
     echo.
@@ -55,12 +55,12 @@ echo  ============================================================
 echo    BUILD SUCCESSFUL!
 echo  ============================================================
 echo.
-echo  Location : dist\CVToposheet\CVToposheet.exe
+echo  Location : _build\dist\CVToposheet\CVToposheet.exe
 echo.
 echo  IMPORTANT: copy your .env before running:
-echo    copy .env dist\CVToposheet\.env
+echo    copy .env _build\dist\CVToposheet\.env
 echo.
-echo  Run:  dist\CVToposheet\CVToposheet.exe
+echo  Run:  _build\dist\CVToposheet\CVToposheet.exe
 echo  A browser will open at http://127.0.0.1:5000 automatically.
 echo.
 pause

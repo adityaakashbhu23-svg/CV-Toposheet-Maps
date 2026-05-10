@@ -1,18 +1,18 @@
 ================================================================
   CV-TOPOSHEET
-  Historical Survey of India - Map Digitization System
-  Version 1.0  |  April 2026
+  AI-Powered Historical Toposheet Digitization System
+  Version 1.0.0  |  May 2026
 ================================================================
 
 WHAT IS THIS APP?
 -----------------
 CV-Toposheet is an AI-powered desktop application that
 automatically extracts and digitizes geographic feature names
-from scanned historical Survey of India topographic maps
+from scanned historical topographic maps
 (toposheets).
 
-It converts old paper maps — which cannot be searched or
-analysed digitally — into a structured, searchable database
+It converts old paper maps which cannot be searched or
+analysed digitally into a structured, searchable database
 of place names, rivers, roads, villages, elevation markers,
 and other geographic features.
 
@@ -45,18 +45,12 @@ WHO IS IT FOR?
   * Anyone studying colonial-era cartography
 
 
-PROTOTYPE STATUS
-----------------
-This is a RESEARCH PROTOTYPE (v1.0).
-
-  * Results may contain OCR or LLM errors
-  * Always verify extracted features against source maps
-  * Not intended for production or safety-critical use
-  * Accuracy improves with better API keys (Gemini / GCV)
-
-This software was developed as part of an academic research
-project on automated digitization of historical cartographic
-documents.
+IMPORTANT NOTES
+---------------
+  * Results may contain OCR or LLM errors — always verify
+    extracted features against the original source maps
+  * Accuracy improves with higher-tier API keys (Gemini / GCV)
+  * Keep your API keys secure and do not share them
 
 
 SYSTEM REQUIREMENTS
@@ -77,10 +71,43 @@ AFTER INSTALLATION
   4. Upload a toposheet and click Process
 
 
+DISCLAIMER
+----------
+This software is provided "as is", without warranty of any
+kind. It may crash or behave unexpectedly due to API errors,
+network issues, or unsupported map formats. Always verify
+extracted data against the original source maps before use
+in any research or publication.
+
+The author and funders are not liable for any data loss,
+damage, or consequences arising from the use of this software.
+Use it at your own risk.
+
+
+ABOUT
+-----
+Designed and developed by Aditya Akash, a heritage
+professional specialising in heritage documentation
+and geospatial analysis.
+
+  Institution : University of Cambridge
+  Programme   : MPhil in Digital Humanities
+  Funding     : Commonwealth Scholarship Commission
+                  & the Cambridge Trust
+
+The project applies AI-driven computer vision to the
+digitization of historical toposheets and cartographic records.
+
+
 LICENSE
 -------
-Academic & Research Use Only.
-See LICENSE.txt for full terms.
+CV-Toposheet is free software released under the
+GNU General Public License v3.0 (GPLv3).
 
-Copyright (c) 2026  Aditya Akash
+You are free to use, study, modify, and distribute this
+software under the terms of the GPLv3.
+See LICENSE.txt for the full license text, or visit:
+https://www.gnu.org/licenses/gpl-3.0.html
+
+Copyright (C) 2026  Aditya Akash
 ================================================================

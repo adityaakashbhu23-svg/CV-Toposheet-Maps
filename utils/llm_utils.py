@@ -271,7 +271,7 @@ def clean_with_openai(
                     {'role': 'user',   'content': _build_user_message(batch)},
                 ],
                 temperature=0.1,
-                max_tokens=4096,
+                max_tokens=8192,
             )
             content = response.choices[0].message.content
             parsed = _parse_llm_json(content)
@@ -286,6 +286,14 @@ def clean_with_openai(
                 print(f'[LLM/OpenAI] Error: {e}')
 
     return all_results
+
+
+# ─────────────────────────────────────────────────────────────
+#  Shared exceptions (must be defined before any provider uses them)
+# ─────────────────────────────────────────────────────────────
+
+class QuotaExhaustedError(Exception):
+    """Raised when the LLM API quota/rate-limit is fully exhausted."""
 
 
 # ─────────────────────────────────────────────────────────────
@@ -348,10 +356,6 @@ def clean_with_grok(
 #  Google Gemini
 # ─────────────────────────────────────────────────────────────
 
-class QuotaExhaustedError(Exception):
-    """Raised when the LLM API quota/rate-limit is fully exhausted."""
-
-
 def clean_with_gemini(
     raw_texts: List[str],
     api_key: str,
@@ -395,7 +399,7 @@ def clean_with_gemini(
                 )
                 # gemini-2.5-flash returns parts; join non-thought text parts
                 parts = response.candidates[0].content.parts if response.candidates else []
-                content = ''.join(p.text for p in parts if p.text and not p.thought)
+                content = ''.join(p.text for p in parts if p.text and not getattr(p, 'thought', False))
                 if not content and response.text:
                     content = response.text  # fallback for older models
                 parsed = _parse_llm_json(content)
@@ -863,7 +867,7 @@ def clean_with_llm(raw_texts: List[str]) -> List[Dict]:
 
     # Build ordered list: configured provider first, then fallbacks, local always last
     # Best speed+cost order: vertex → openai → grok → gemini → claude → groq → local
-    _all = [_try_vertex, _try_openai, _try_grok, _try_gemini, _try_claude, _try_local]
+    _all = [_try_vertex, _try_openai, _try_grok, _try_gemini, _try_claude, _try_groq, _try_local]
     _named = {
         'vertex': _try_vertex,
         'claude': _try_claude,

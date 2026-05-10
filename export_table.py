@@ -14,6 +14,7 @@
 
 import sys
 import csv
+import html
 import re
 import sqlite3
 from pathlib import Path
@@ -137,11 +138,11 @@ def export_html(rows: list, map_filter: str = '', type_filter: str = ''):
         map_number, map_name, year = parse_map_name(r['map_name'])
         conf = float(r['confidence'])
         conf_color = '#2d6a2d' if conf >= 0.85 else ('#b8860b' if conf >= 0.70 else '#8b0000')
-        mapkey    = r['map_name'].replace('"', '').replace("'", '')
-        safe_name = r['feature_name'].replace('"', '').replace("'", '').replace('<', '').replace('>', '')
+        mapkey    = html.escape(r['map_name'])
+        safe_name = html.escape(r['feature_name'])
         table_rows_html += (
             f'<tr data-mk="{mapkey}" data-ft="{r["feature_type"]}" data-fn="{safe_name.lower()}">'
-            f'<td><strong>{r["feature_name"]}</strong></td>'
+            f'<td><strong>{html.escape(r["feature_name"])}</strong></td>'
             f'<td>{r["grid_reference"] or "-"}</td>'
             f'<td>{map_number}</td>'
             f'<td>{map_name}</td>'
@@ -155,14 +156,14 @@ def export_html(rows: list, map_filter: str = '', type_filter: str = ''):
     checkboxes_html = ''
     for k in sorted_keys:
         s        = map_stats[k]
-        safe_k   = k.replace('"', '').replace("'", '')
+        safe_k   = html.escape(k)
         _, _, yr = parse_map_name(k)
         meta = f'{yr} · {s["count"]}' if yr else f'· {s["count"]}'
         checkboxes_html += (
             f'<label class="map-label">'
             f'<input type="checkbox" class="map-cb" value="{safe_k}" checked onchange="onToggle()">'
             f'<span class="ml-text">'
-            f'<span class="ml-num" style="white-space:normal;word-break:break-word">{k}</span>'
+            f'<span class="ml-num" style="white-space:normal;word-break:break-word">{safe_k}</span>'
             f'</span>'
             f'<span class="ml-meta">{meta}</span>'
             f'</label>\n'

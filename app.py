@@ -61,7 +61,7 @@ def _feature_count() -> int:
 def _map_count() -> int:
     if not MAPS_DIR.exists():
         return 0
-    return sum(1 for _ in MAPS_DIR.rglob('*') if _.suffix.lower() in ALLOWED_EXT)
+    return sum(1 for _ in MAPS_DIR.glob('*') if _.is_file() and _.suffix.lower() in ALLOWED_EXT)
 
 
 def _merge_session_to_global(session_id: str) -> None:
@@ -286,6 +286,46 @@ def stream(filename):
 def _stream_gen(filename, model, session_id):
     global _current_proc
     env_overrides = _MODEL_ENVS.get(model, _MODEL_ENVS['best'])
+
+    # ── API key check ────────────────────────────────────────────────────────
+    _KEY_NEEDED = {
+        'vertex':  None,                   # uses service-account JSON, no API key
+        'gemini':  'GEMINI_API_KEY',
+        'groq':    'GROQ_API_KEY',
+        'openai':  'OPENAI_API_KEY',
+        'claude':  'CLAUDE_API_KEY',
+        'grok':    'GROK_API_KEY',
+    }
+    provider = env_overrides.get('LLM_PROVIDER', 'vertex')
+    required_key = _KEY_NEEDED.get(provider)
+    if required_key and not os.environ.get(required_key, '').strip():
+        friendly = {
+            'GEMINI_API_KEY': 'Gemini API Key',
+            'GROQ_API_KEY':   'Groq API Key',
+            'OPENAI_API_KEY': 'OpenAI API Key',
+            'CLAUDE_API_KEY': 'Claude API Key',
+            'GROK_API_KEY':   'Grok (xAI) API Key',
+        }.get(required_key, required_key)
+        msg = (f'❌ No {friendly} found. '
+               f'Please go to ⚙️ Settings, enter your {friendly}, and save before processing.')
+        yield f'data: {json.dumps({"msg": msg, "error": True})}\n\n'
+        return
+    # Also check service-account JSON for vertex LLM or GCV OCR (both need it)
+    ocr_engine = env_overrides.get('OCR_ENGINE', os.environ.get('OCR_ENGINE', 'gcv')).lower()
+    needs_gcp = (provider == 'vertex') or (ocr_engine == 'gcv')
+    if needs_gcp:
+        creds = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '').strip()
+        if not creds or not Path(creds).exists():
+            if provider == 'vertex':
+                detail = 'Vertex AI LLM + Google Cloud Vision OCR both require'
+            else:
+                detail = 'Google Cloud Vision OCR requires'
+            msg = (f'❌ No Google service-account JSON found. '
+                   f'{detail} a GCP service account. '
+                   f'Please go to ⚙️ Settings, upload your service_account.json, and save before processing.')
+            yield f'data: {json.dumps({"msg": msg, "error": True})}\n\n'
+            return
+    # ── end API key check ────────────────────────────────────────────────────
 
     if not _process_lock.acquire(blocking=False):
         yield f'data: {json.dumps({"msg": "Another map is already being processed. Please wait and try again."})}\n\n'
@@ -827,8 +867,13 @@ dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-ove
 dropZone.addEventListener('drop', e => {
   e.preventDefault();
   dropZone.classList.remove('drag-over');
-  fileInput.files = e.dataTransfer.files;
-  showPreviews();
+  // Merge dropped files into _fileList (don't replace — accumulate)
+  Array.from(e.dataTransfer.files).forEach(f => {
+    const already = _fileList.some(x => x.name === f.name && x.size === f.size);
+    if (!already) _fileList.push(f);
+  });
+  _syncInputFiles();
+  _renderPreviews();
 });
 
 // DataTransfer-based file list so we can remove individual files
@@ -886,7 +931,13 @@ function _renderPreviews() {
 }
 
 function showPreviews() {
-  _fileList = Array.from(fileInput.files);
+  // Merge newly picked files into _fileList (don't replace — accumulate)
+  const incoming = Array.from(fileInput.files);
+  incoming.forEach(f => {
+    const already = _fileList.some(x => x.name === f.name && x.size === f.size);
+    if (!already) _fileList.push(f);
+  });
+  _syncInputFiles();
   _renderPreviews();
 }
 
@@ -1326,16 +1377,18 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
 
 
 def _process_html(filename: str, model: str = 'best', session_id: str = '') -> str:
+    import html as _html
     enc = url_quote(filename, safe='')
     model_enc = url_quote(model, safe='')
     session_enc = url_quote(session_id, safe='')
+    safe_filename = _html.escape(filename)
 
     return f"""<!DOCTYPE html>
 <html lang='en'>
 <head>
 <meta charset='UTF-8'>
 <meta name='viewport' content='width=device-width,initial-scale=1.0'>
-<title>Processing &ndash; {filename}</title>
+<title>Processing &ndash; {safe_filename}</title>
 <style>
 * {{ box-sizing:border-box; margin:0; padding:0; }}
 body {{ height:100vh; overflow:hidden; font-family:'Segoe UI', system-ui, Arial, sans-serif; background:#f0f4f8; display:flex; flex-direction:column; }}
@@ -1385,7 +1438,7 @@ body {{ height:100vh; overflow:hidden; font-family:'Segoe UI', system-ui, Arial,
     <div class="status-row">
       <div class="spinner" id="spinner"></div>
       <div class="status-text">
-        Processing <span class="filename-tag">{filename}</span>
+        Processing <span class="filename-tag">{safe_filename}</span>
       </div>
     </div>
 

@@ -38,8 +38,8 @@ def find_new_maps() -> list:
     """Return list of Path objects for maps not yet in grid_detection.json."""
     processed = set()
     if GRID_PATH.exists():
-        d = json.load(open(GRID_PATH, encoding='utf-8'))
-        processed = set(d.keys())
+        with open(GRID_PATH, encoding='utf-8') as _f:
+            processed = set(json.load(_f).keys())
 
     map_files_raw = (
         list(config.MAPS_FOLDER.glob('*.jpg')) +
@@ -47,7 +47,11 @@ def find_new_maps() -> list:
         list(config.MAPS_FOLDER.glob('*.JPG')) +
         list(config.MAPS_FOLDER.glob('*.JPEG')) +
         list(config.MAPS_FOLDER.glob('*.png')) +
-        list(config.MAPS_FOLDER.glob('*.PNG'))
+        list(config.MAPS_FOLDER.glob('*.PNG')) +
+        list(config.MAPS_FOLDER.glob('*.tif')) +
+        list(config.MAPS_FOLDER.glob('*.tiff')) +
+        list(config.MAPS_FOLDER.glob('*.TIF')) +
+        list(config.MAPS_FOLDER.glob('*.TIFF'))
     )
 
     seen_stems = set()
@@ -74,7 +78,8 @@ def phase1_tile(new_maps: list) -> dict:
 
     manifest = {}
     if MANIFEST_PATH.exists():
-        manifest = json.load(open(MANIFEST_PATH, encoding='utf-8'))
+        with open(MANIFEST_PATH, encoding='utf-8') as _f:
+            manifest = json.load(_f)
 
     for map_path in new_maps:
         map_name = map_path.stem
@@ -119,7 +124,8 @@ def phase2_ocr(new_maps: list, manifest: dict) -> dict:
 
     all_results = {}
     if OCR_RAW_PATH.exists():
-        all_results = json.load(open(OCR_RAW_PATH, encoding='utf-8'))
+        with open(OCR_RAW_PATH, encoding='utf-8') as _f:
+            all_results = json.load(_f)
 
     for map_path in new_maps:
         map_name = map_path.stem
@@ -200,9 +206,9 @@ def _detect_grid_from_ocr(detections, img_width, img_height):
         bx1, by1, bx2, by2 = d['bbox']
         cx = (bx1 + bx2) / 2
         cy = (by1 + by2) / 2
-        if row_pat.match(text) and (cy < 80 or cy > img_height - 80):
+        if row_pat.match(text) and (cx < 80 or cx > img_width - 80):
             row_ys.append(cy)
-        if col_pat.match(text) and (cx < 80 or cx > img_width - 80):
+        if col_pat.match(text) and (cy < 80 or cy > img_height - 80):
             col_xs.append(cx)
     return sorted(set(col_xs)), sorted(set(row_ys))
 
@@ -263,7 +269,8 @@ def phase3_grid(new_maps: list, manifest: dict, ocr_results: dict) -> dict:
 
     grid_results = {}
     if GRID_PATH.exists():
-        grid_results = json.load(open(GRID_PATH, encoding='utf-8'))
+        with open(GRID_PATH, encoding='utf-8') as _f:
+            grid_results = json.load(_f)
 
     for map_path in new_maps:
         map_name = map_path.stem
@@ -320,9 +327,22 @@ def phase4_llm(new_maps: list, grid_results: dict) -> dict:
     print(f'#  Phase 4 (incremental): LLM cleaning on {len(new_maps)} new map(s)')
     print(f'{"#"*60}')
 
+    # Auto-detect map country from OCR text and update system prompt
+    import utils.llm_utils as llm_utils
+    if OCR_RAW_PATH.exists():
+        try:
+            with open(OCR_RAW_PATH, encoding='utf-8') as _f:
+                _ocr_data = json.load(_f)
+            _country = llm_utils.detect_country(_ocr_data, fallback=config.MAP_COUNTRY)
+            llm_utils.SYSTEM_PROMPT = llm_utils.build_system_prompt(_country)
+            print(f'[LLM] Country auto-detected: {_country.upper()}')
+        except Exception:
+            pass
+
     llm_results = {}
     if LLM_OUT_PATH.exists():
-        llm_results = json.load(open(LLM_OUT_PATH, encoding='utf-8'))
+        with open(LLM_OUT_PATH, encoding='utf-8') as f:
+            llm_results = json.load(f)
 
     new_map_names = {p.stem for p in new_maps}
 
@@ -344,7 +364,9 @@ def phase4_llm(new_maps: list, grid_results: dict) -> dict:
             continue
 
         raw_texts   = [d['text'] for d in detections]
-        det_by_text = {d['text']: d for d in detections}
+        det_by_text = {}
+        for d in detections:
+            det_by_text.setdefault(d['text'], d)
 
         cleaned = clean_with_llm(raw_texts)
 

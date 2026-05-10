@@ -66,8 +66,14 @@ datas = (
         # ── Prompt text / spelling files ────────────────────────────
         (R('prompts'), 'prompts'),
         # ── Google Cloud credentials ─────────────────────────────────
-        (R('service_account.json'),  '.'),
-        (R('service_account2.json'), '.'),
+        # NOTE: Credentials are NOT bundled here for public distribution.
+        # For a PRIVATE build (personal use / trusted users only), you can
+        # uncomment the two lines below to bake your credentials into the exe:
+        #   (R('service_account.json'),  '.'),
+        #   (R('service_account2.json'), '.'),
+        # For public distribution, leave these commented — users supply their
+        # own JSON file via the Settings page in the app (or place it next to
+        # the exe after installation).
     ]
 )
 
@@ -120,6 +126,7 @@ exe = EXE(
     strip=False,
     upx=True,
     console=True,
+    icon=os.path.join(SPECPATH, 'app_icon.ico'),
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
