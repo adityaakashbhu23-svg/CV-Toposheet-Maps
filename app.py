@@ -513,17 +513,17 @@ body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; backg
 .right { width:440px; min-width:380px; max-width:520px; display:flex; flex-direction:column; padding:8px 12px; gap:0; background:#fff; border:2px solid #93c5d4; border-radius:14px; box-shadow:0 2px 16px rgba(14,116,144,.08); }
 .right-title { font-size:0.55em; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#0E7490; margin-bottom:4px; padding-bottom:3px; border-bottom:1.5px solid #e0f2f7; flex-shrink:0; }
 .model-label { font-size:0.63em; font-weight:600; color:#6b8a99; text-transform:uppercase; letter-spacing:.08em; margin-bottom:4px; flex-shrink:0; }
-.model-cards { display:flex; flex-direction:column; gap:1px; margin-bottom:4px; flex:1; overflow-y:auto; min-height:0; padding-right:3px; scrollbar-width:thin; scrollbar-color:#93c5d4 #f0f4f8; }
+.model-cards { display:flex; flex-direction:column; gap:4px; margin-bottom:3px; flex:1; overflow-y:auto; min-height:0; padding-right:3px; scrollbar-width:thin; scrollbar-color:#93c5d4 #f0f4f8; }
 .model-cards::-webkit-scrollbar { width:6px; }
 .model-cards::-webkit-scrollbar-track { background:#f0f4f8; border-radius:3px; }
 .model-cards::-webkit-scrollbar-thumb { background:#93c5d4; border-radius:3px; }
 .model-cards::-webkit-scrollbar-thumb:hover { background:#0e7490; }
-.model-card { border:1.5px solid #ccdde3; border-radius:6px; padding:3px 7px; cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:6px; background:#fff; box-shadow:0 1px 2px rgba(14,116,144,.05); flex-shrink:0; }
+.model-card { border:1.5px solid #ccdde3; border-radius:6px; padding:3px 8px; cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:6px; background:#fff; box-shadow:0 1px 2px rgba(14,116,144,.05); flex-shrink:0; }
 .model-card:hover { border-color:#0e7490; background:#f0f9fb; box-shadow:0 2px 10px rgba(14,116,144,.15); }
 .model-card input[type=radio] { accent-color:#0e7490; margin:0; flex-shrink:0; width:13px; height:13px; }
 .mc-body { flex:1; }
-.mc-body .mc-name { font-size:0.68em; font-weight:700; color:#1e3a4a; display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
-.mc-body .mc-desc { font-size:0.55em; color:#6b8a99; margin-top:0px; line-height:1.2; }
+.mc-body .mc-name { font-size:0.74em; font-weight:700; color:#1e3a4a; display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+.mc-body .mc-desc { font-size:0.65em; color:#6b8a99; margin-top:0px; line-height:1.2; }
 .mc-key { display:inline; font-size:1em; font-weight:600; background:#e0f2f7; border:1px solid #b8dde8; border-radius:3px; padding:0 3px; color:#0e7490; letter-spacing:.01em; }
 .badge { display:inline-block; border-radius:3px; padding:0px 4px; font-size:0.58em; font-weight:700; }
 .badge-best    { background:#d0f0f7; color:#0e7490; }
@@ -716,49 +716,56 @@ body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; backg
         <input type="radio" name="model_sel" value="best" checked>
         <div class="mc-body">
           <div class="mc-name">1. Best Quality <span class="badge badge-best">RECOMMENDED</span></div>
-          <div class="mc-desc">GCV OCR (parallel) + Vertex AI Gemini 2.5 Flash<br>Highest accuracy &middot; 150 items/batch &middot; GCP service account</div>
+          <div class="mc-desc">GCV OCR (parallel) + Vertex AI Gemini 2.5 Flash</div>
         </div>
       </label>
       <label class="model-card" onclick="selectCard(this)" data-model="fast">
         <input type="radio" name="model_sel" value="fast">
         <div class="mc-body">
           <div class="mc-name">2. Fast <span class="badge badge-fast">QUICK</span></div>
-          <div class="mc-desc">GCV OCR (parallel) + Groq LLaMA 3.1 8B<br>Fastest end-to-end &middot; 60 items/batch &middot; free Groq tier</div>
+          <div class="mc-desc">GCV OCR (parallel) + Groq LLaMA 3.3 70B</div>
         </div>
       </label>
       <label class="model-card" onclick="selectCard(this)" data-model="ensemble">
         <input type="radio" name="model_sel" value="ensemble">
         <div class="mc-body">
           <div class="mc-name">3. All LLMs Together <span class="badge badge-premium">PREMIUM</span></div>
-          <div class="mc-desc">GCV OCR + all configured LLMs run in parallel<br>Majority vote consensus &middot; highest confidence</div>
+          <div class="mc-desc">GCV OCR + all configured LLMs run in parallel</div>
         </div>
       </label>
       <label class="model-card" onclick="selectCard(this)" data-model="openai">
         <input type="radio" name="model_sel" value="openai">
         <div class="mc-body">
           <div class="mc-name">4. OpenAI GPT-4o <span class="badge badge-optional">OPTIONAL</span></div>
-          <div class="mc-desc">GCV OCR + GPT-4o-mini<br>Reliable, paid OpenAI API</div>
+          <div class="mc-desc">GCV OCR + GPT-4o-mini</div>
         </div>
       </label>
       <label class="model-card" onclick="selectCard(this)" data-model="claude">
         <input type="radio" name="model_sel" value="claude">
         <div class="mc-body">
           <div class="mc-name">5. Claude Haiku <span class="badge badge-claude">CLAUDE</span></div>
-          <div class="mc-desc">GCV OCR + Claude 3.5 Haiku<br>Anthropic, Claude API</div>
+          <div class="mc-desc">GCV OCR + Claude Haiku</div>
         </div>
       </label>
       <label class="model-card" onclick="selectCard(this)" data-model="grok">
         <input type="radio" name="model_sel" value="grok">
         <div class="mc-body">
           <div class="mc-name">6. Grok (xAI) <span class="badge badge-grok">GROK</span></div>
-          <div class="mc-desc">GCV OCR + Grok-3-mini<br>Fast inference, xAI API</div>
+          <div class="mc-desc">GCV OCR + Grok-3-mini</div>
         </div>
       </label>
       <label class="model-card" onclick="selectCard(this)" data-model="gemini">
         <input type="radio" name="model_sel" value="gemini">
         <div class="mc-body">
           <div class="mc-name">7. Gemini API <span class="badge badge-gemini">GEMINI KEY</span></div>
-          <div class="mc-desc">GCV OCR + Gemini 2.5 Flash<br>Google AI Studio, Gemini API key</div>
+          <div class="mc-desc">GCV OCR + Gemini 2.5 Flash</div>
+        </div>
+      </label>
+      <label class="model-card" onclick="selectCard(this)" data-model="offline">
+        <input type="radio" name="model_sel" value="offline">
+        <div class="mc-body">
+          <div class="mc-name">8. Offline <span class="badge badge-offline">NO CLOUD</span></div>
+          <div class="mc-desc">EasyOCR (local) + Groq LLaMA 3.3 70B</div>
         </div>
       </label>
       <div class="info-strip" id="modelInfo">
@@ -782,8 +789,8 @@ const MODEL_INFO = {
   openai:   '<b>OpenAI GPT-4o:</b> Parallel GCV OCR + GPT-4o-mini. 80 items/batch. Reliable paid OpenAI API.',
   claude:   '<b>Claude Haiku:</b> Parallel GCV OCR + Claude 3.5 Haiku. Strong reasoning. Anthropic API key required.',
   grok:     '<b>Grok (xAI):</b> Parallel GCV OCR + Grok-3-mini. Fast xAI inference. xAI API key required.',
-  gemini:   '<b>Gemini API:</b> Google Cloud Vision OCR + Gemini (API key). Uses GEMINI_API_KEY from .env — no Vertex AI or GCP billing needed.',
-  offline:  '<b>Offline OCR:</b> EasyOCR (local, no Google Cloud) + Groq LLaMA. Sequential OCR tiles – slower but no GCP needed.',
+  gemini:   '<b>Gemini API:</b> Google Cloud Vision OCR + Gemini (API key). Uses GEMINI_API_KEY from .env no Vertex AI or GCP billing needed.',
+  offline:  '<b>Offline OCR:</b> EasyOCR runs locally on your machine. No Google Cloud Vision or GCP service account needed. Internet required for LLM cleaning. Use this mode when you have no GCP credentials.',
 };
 
 function killRunningJob() {

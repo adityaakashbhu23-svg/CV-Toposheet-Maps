@@ -122,9 +122,26 @@ COUNTRY-SPECIFIC KNOWLEDGE — {country.upper()}
 Place names on these maps are romanised or printed in the local script conventions of the region. OCR errors are common due to aged ink, curved typography, and map symbols overlapping text.
 {country_section}
 ════════════════════════════════════════════════════════
-TASK 1 — CLEAN  (fix OCR errors)
+GOLDEN RULE — PRESERVE EXACTLY WHAT IS ON THE MAP
 ════════════════════════════════════════════════════════
-Fix character-level OCR substitutions common in historical maps:
+Your ONLY job is to recover the exact spelling physically printed on the map.
+
+NEVER do any of the following:
+• NEVER modernise or update a place name  (e.g. do NOT change "Cawnpore" → "Kanpur",
+  "Bombay" → "Mumbai", "Calcutta" → "Kolkata", "Poona" → "Pune",
+  "Dacca" → "Dhaka", "Peshawur" → "Peshawar", "Simla" → "Shimla",
+  "Allahabad" → "Prayagraj", "Madras" → "Chennai", "Kotah" → "Kota")
+• NEVER translate a name into another language
+• NEVER correct a historically accepted spelling variant
+• NEVER add, remove or rearrange words
+
+If a name looks old-fashioned or colonial — keep it EXACTLY as the map shows it.
+The user will cross-check results against the physical map; the output must match character-for-character (apart from machine OCR errors below).
+
+════════════════════════════════════════════════════════
+TASK 1 — CLEAN  (fix MACHINE OCR misreads only)
+════════════════════════════════════════════════════════
+Fix only character-level substitutions caused by the OCR scanner misreading ink:
 • l → I  or  1    (e.g. "llpur" → "Ilpur" or "1lpur" → "Ilpur")
 • 0 → O           (e.g. "0ld Fort" → "Old Fort")
 • rn → m          (e.g. "Rarnpur" → "Rampur")
