@@ -42,10 +42,19 @@ VERTEX_LOCATION = os.getenv('VERTEX_LOCATION', 'us-central1')
 VERTEX_MODEL    = os.getenv('VERTEX_MODEL',    'gemini-2.5-flash')
 
 # ── Google Cloud Vision ──────────────────────────────────────
-_gcv_creds_rel  = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', 'service_account.json')
-# Resolve relative paths against the project root and set the env-var that
-# the Google Cloud client library reads automatically.
-_gcv_creds_path = Path(__file__).parent / _gcv_creds_rel
+# Priority: service_account2.json → Service_account_Backup.json
+_gcv_creds_rel  = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', '')
+if _gcv_creds_rel:
+    _gcv_creds_path = Path(__file__).parent / _gcv_creds_rel
+else:
+    _primary_path  = Path(__file__).parent / 'service_account2.json'
+    _backup_path   = Path(__file__).parent / 'Service_account_Backup.json'
+    if _primary_path.exists():
+        _gcv_creds_path = _primary_path
+    elif _backup_path.exists():
+        _gcv_creds_path = _backup_path
+    else:
+        _gcv_creds_path = _primary_path  # will just not be set
 if _gcv_creds_path.exists():
     os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(_gcv_creds_path)
 
