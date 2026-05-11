@@ -8,8 +8,10 @@
 # Output:  logs/ocr_results_raw.json
 #          logs/ocr_checkpoint/  (per-map intermediate saves for crash-recovery)
 #
-# Tiles within each map are processed in parallel using ThreadPoolExecutor.
-# Set OCR_WORKERS=N in .env to control parallelism (default: 4).
+# For GCV mode, tiles are grouped into batches (GCV_BATCH_SIZE, default 16) so
+# each thread sends one batch_annotate_images request instead of 16 individual
+# calls — ~16x fewer HTTP round-trips.  OCR_WORKERS threads run in parallel.
+# Set GCV_BATCH_SIZE=1 in .env to disable batching (debug mode).
 
 import json
 import sys
@@ -19,12 +21,14 @@ from tqdm import tqdm
 
 import config
 from utils.image_utils import load_image, generate_tiles, preprocess_for_ocr
-from utils.ocr_utils import ocr_tile, translate_bbox_to_global, deduplicate
+from utils.ocr_utils import ocr_tile, ocr_tiles_gcv_batch, translate_bbox_to_global, deduplicate
 
 MANIFEST_PATH    = config.LOGS_FOLDER / 'tiles_manifest.json'
 OCR_RAW_PATH     = config.LOGS_FOLDER / 'ocr_results_raw.json'
 CHECKPOINT_DIR   = config.LOGS_FOLDER / 'ocr_checkpoint'
-OCR_WORKERS      = int(getattr(config, 'OCR_WORKERS', 4))
+OCR_WORKERS      = int(getattr(config, 'OCR_WORKERS',    8))
+GCV_BATCH_SIZE   = int(getattr(config, 'GCV_BATCH_SIZE', 16))
+_USE_GCV_BATCH   = (getattr(config, 'OCR_ENGINE', 'gcv') == 'gcv') and GCV_BATCH_SIZE > 1
 
 
 def _checkpoint_path(map_name: str) -> Path:
@@ -54,6 +58,32 @@ def _process_tile(args):
     processed = preprocess_for_ocr(tile_img)
     detections = ocr_tile(processed, config.OCR_CONFIDENCE)
     return translate_bbox_to_global(detections, x, y)
+
+
+def _process_tile_batch_gcv(batch_args):
+    """
+    Worker: preprocess + batch-OCR multiple tiles via GCV batch_annotate_images.
+    Sends one HTTP request per batch (up to GCV_BATCH_SIZE tiles) instead of one
+    request per tile — dramatically reduces API round-trips.
+    Falls back to individual ocr_tile() for any tile whose batch call fails.
+    Returns a flat list of globally-shifted detections.
+    """
+    preprocessed = []
+    for tile_img, x, y, x2, y2 in batch_args:
+        preprocessed.append((preprocess_for_ocr(tile_img), x, y, x2, y2))
+
+    tiles_only   = [p[0] for p in preprocessed]
+    batch_results = ocr_tiles_gcv_batch(tiles_only, config.OCR_CONFIDENCE)
+
+    all_dets = []
+    for (tile_img, x, y, x2, y2), (dets, failed) in zip(preprocessed, batch_results):
+        if failed:
+            # Individual fallback keeps quality — just costs one extra call
+            individual_dets = ocr_tile(tile_img, config.OCR_CONFIDENCE)
+            all_dets.extend(translate_bbox_to_global(individual_dets, x, y))
+        else:
+            all_dets.extend(translate_bbox_to_global(dets, x, y))
+    return all_dets
 
 
 def run_ocr(resume: bool = False) -> dict:
@@ -94,26 +124,43 @@ def run_ocr(resume: bool = False) -> dict:
                 all_results[map_name] = cached
                 continue
 
-        print(f'\n[OCR] Map: {map_name}  (workers={OCR_WORKERS})')
+        print(f'\n[OCR] Map: {map_name}  (workers={OCR_WORKERS}, gcv_batch={GCV_BATCH_SIZE if _USE_GCV_BATCH else "off"})')
         img = load_image(map_info['file'])
 
         # Collect all tile args first (generate_tiles is a generator)
-        tile_args = list(generate_tiles(img, config.TILE_SIZE, config.TILE_OVERLAP))
+        tile_args   = list(generate_tiles(img, config.TILE_SIZE, config.TILE_OVERLAP))
         total_tiles = len(tile_args)
 
         all_detections = []
 
-        with ThreadPoolExecutor(max_workers=OCR_WORKERS) as pool:
-            futures = {pool.submit(_process_tile, args): i for i, args in enumerate(tile_args)}
-            with tqdm(total=total_tiles, desc='  OCR tiles', unit='tile') as pbar:
-                for future in as_completed(futures):
-                    try:
-                        global_dets = future.result()
-                        all_detections.extend(global_dets)
-                    except Exception as exc:
-                        tile_idx = futures[future]
-                        print(f'  [OCR] Tile {tile_idx} error: {exc}')
-                    pbar.update(1)
+        if _USE_GCV_BATCH:
+            # ── GCV batch mode: group tiles → fewer HTTP calls ──────────────
+            batches = [tile_args[i:i + GCV_BATCH_SIZE]
+                       for i in range(0, total_tiles, GCV_BATCH_SIZE)]
+            with ThreadPoolExecutor(max_workers=OCR_WORKERS) as pool:
+                futures = {pool.submit(_process_tile_batch_gcv, b): len(b) for b in batches}
+                with tqdm(total=total_tiles, desc='  OCR tiles', unit='tile') as pbar:
+                    for future in as_completed(futures):
+                        b_size = futures[future]
+                        try:
+                            global_dets = future.result()
+                            all_detections.extend(global_dets)
+                        except Exception as exc:
+                            print(f'  [OCR] Batch error: {exc}')
+                        pbar.update(b_size)
+        else:
+            # ── Individual tile mode (non-GCV engines or GCV_BATCH_SIZE=1) ──
+            with ThreadPoolExecutor(max_workers=OCR_WORKERS) as pool:
+                futures = {pool.submit(_process_tile, args): i for i, args in enumerate(tile_args)}
+                with tqdm(total=total_tiles, desc='  OCR tiles', unit='tile') as pbar:
+                    for future in as_completed(futures):
+                        try:
+                            global_dets = future.result()
+                            all_detections.extend(global_dets)
+                        except Exception as exc:
+                            tile_idx = futures[future]
+                            print(f'  [OCR] Tile {tile_idx} error: {exc}')
+                        pbar.update(1)
 
         # Remove duplicates caused by tile overlap
         before = len(all_detections)

@@ -57,15 +57,29 @@ else:
         _gcv_creds_path = _primary_path  # will just not be set
 if _gcv_creds_path.exists():
     os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(_gcv_creds_path)
+    _which = _gcv_creds_path.name
+    if 'backup' in _which.lower() or 'Backup' in _which:
+        print(f'[Config/GCV] ⚠️  Primary service_account2.json not found — using BACKUP: {_which}')
+    else:
+        print(f'[Config/GCV] ✅  GCV credentials loaded: {_which}')
+else:
+    print(f'[Config/GCV] ❌  No GCV service account found — GCV OCR will fail. Upload one in ⚙️ Settings.')
 
 # ── OCR / Tiling ──────────────────────────────────────────────
 OCR_ENGINE      = os.getenv('OCR_ENGINE', 'gcv').lower()   # gcv | easyocr | tesseract
 OCR_CONFIDENCE  = float(os.getenv('OCR_CONFIDENCE_THRESHOLD', '0.3'))
-# OCR workers — default to 4; override with OCR_WORKERS=N in .env
-# Keeping this at 4 (not cpu_count) avoids OpenBLAS OOM on large maps
-OCR_WORKERS     = int(os.getenv('OCR_WORKERS', '4'))  # parallel tile workers
+# OCR workers — default to 8 for GCV (pure network I/O, no memory penalty).
+# If OCR_ENGINE=easyocr lower this to 2-4 to avoid OpenBLAS OOM on large maps.
+OCR_WORKERS     = int(os.getenv('OCR_WORKERS', '8'))   # parallel tile workers
+# GCV batch size — how many tiles to send in one batch_annotate_images call.
+# GCV allows up to 16 per synchronous request; 16 is optimal for throughput.
+# Set GCV_BATCH_SIZE=1 in .env to disable batching (debug / single-tile mode).
+GCV_BATCH_SIZE  = int(os.getenv('GCV_BATCH_SIZE', '16'))
 TILE_SIZE       = int(os.getenv('TILE_SIZE',   '1024'))
 TILE_OVERLAP    = int(os.getenv('TILE_OVERLAP', '50'))
+# Gemini API sleep between batches (seconds).
+# Free tier needs ~4s (15 RPM); paid tier is fine at 1-2s (60-1000 RPM).
+GEMINI_BATCH_SLEEP = float(os.getenv('GEMINI_BATCH_SLEEP', '2.0'))
 
 # ── Country / Map Origin ─────────────────────────────────────
 # Controls which country-specific knowledge block is injected into the LLM prompt.

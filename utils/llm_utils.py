@@ -379,11 +379,17 @@ def clean_with_gemini(
     quota_errors = 0
     total_batches = (len(raw_texts) + batch_size - 1) // batch_size
 
+    try:
+        import config as _cfg
+        _gemini_sleep = float(getattr(_cfg, 'GEMINI_BATCH_SLEEP', 2.0))
+    except Exception:
+        _gemini_sleep = 2.0
+
     for start in range(0, len(raw_texts), batch_size):
         batch = raw_texts[start:start + batch_size]
         batch_num = start // batch_size + 1
         if start > 0:
-            time.sleep(4)  # 4s gap → ~15 RPM, stays within Gemini free tier limit
+            time.sleep(_gemini_sleep)  # configurable via GEMINI_BATCH_SLEEP in .env
 
         # Retry loop: up to 3 attempts per batch on rate limit
         for attempt in range(3):
@@ -508,7 +514,7 @@ def clean_with_groq(
     raw_texts: List[str],
     api_key: str,
     model: str = 'llama-3.1-8b-instant',
-    batch_size: int = 60
+    batch_size: int = 80
 ) -> List[Dict]:
     """
     Send raw OCR texts to Groq (free tier) for cleaning and classification.
@@ -669,7 +675,7 @@ def clean_with_vertex(
     project: str,
     location: str = 'us-central1',
     model: str = 'gemini-2.5-flash',
-    batch_size: int = 150
+    batch_size: int = 200
 ) -> List[Dict]:
     """
     Send raw OCR texts to Vertex AI Gemini for cleaning and classification.

@@ -170,7 +170,7 @@ def export_html(rows: list, map_filter: str = '', type_filter: str = ''):
         )
 
     # ── full HTML ─────────────────────────────────────────────────────────
-    html = f"""<!DOCTYPE html>
+    out = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -589,7 +589,7 @@ onToggle();
 </html>"""
 
     with open(OUT_HTML, 'w', encoding='utf-8') as f:
-        f.write(html)
+        f.write(out)
     print(f"[Export] HTML -> {OUT_HTML}  (open in browser)")
 
 

@@ -45,6 +45,106 @@ def _get_gcv_client():
     return _gcv_client
 
 
+def _reset_gcv_client():
+    """Force re-initialization of GCV client (call after switching credentials)."""
+    global _gcv_client
+    import threading
+    if _gcv_client_lock is None:
+        return
+    with _gcv_client_lock:
+        _gcv_client = None
+
+
+def _parse_gcv_full_text(full_text, confidence_threshold: float) -> List[Dict]:
+    """
+    Extract word-level detections from a GCV FullTextAnnotation object.
+    Shared by ocr_tile_gcv() and ocr_tiles_gcv_batch().
+    Returns [] for blank tiles (not an error — many tiles have no text).
+    """
+    if not full_text or not full_text.pages:
+        return []
+    detections = []
+    for page in full_text.pages:
+        for block in page.blocks:
+            for para in block.paragraphs:
+                for word in para.words:
+                    word_text = ''.join(s.text for s in word.symbols).strip()
+                    if not word_text:
+                        continue
+                    confidences = [s.confidence for s in word.symbols if s.confidence > 0]
+                    conf = sum(confidences) / len(confidences) if confidences else 0.85
+                    if conf < confidence_threshold:
+                        continue
+                    verts = word.bounding_box.vertices
+                    xs = [v.x for v in verts]
+                    ys = [v.y for v in verts]
+                    if not xs or not ys:
+                        continue
+                    detections.append({
+                        'text':       word_text,
+                        'confidence': round(float(conf), 4),
+                        'bbox':       [int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys))],
+                    })
+    return detections
+
+
+def ocr_tiles_gcv_batch(tiles: list, confidence_threshold: float = 0.3) -> list:
+    """
+    Send up to 16 tiles in a single batch_annotate_images call to GCV.
+    This is far faster than one call per tile because it eliminates per-request
+    HTTP overhead and auth round-trips.
+
+    Returns a list of (detections, gcv_failed) — one entry per input tile.
+    gcv_failed=True means that specific tile failed and should be retried.
+
+    GCV limits: max 16 images per synchronous batch request.
+    Controlled by GCV_BATCH_SIZE in config (default 16).
+    """
+    try:
+        from google.cloud import vision as _vision
+    except ImportError:
+        return [([], True)] * len(tiles)
+
+    # Encode each tile to PNG bytes; track indices that failed encoding
+    encoded: dict = {}
+    for i, tile in enumerate(tiles):
+        success, buf = cv2.imencode('.png', tile)
+        if success:
+            encoded[i] = buf.tobytes()
+
+    if not encoded:
+        return [([], True)] * len(tiles)
+
+    # Build requests only for successfully encoded tiles
+    valid_tile_indices = sorted(encoded.keys())
+    requests_list = []
+    for idx in valid_tile_indices:
+        image   = _vision.Image(content=encoded[idx])
+        feature = _vision.Feature(type_=_vision.Feature.Type.DOCUMENT_TEXT_DETECTION)
+        requests_list.append(_vision.AnnotateImageRequest(image=image, features=[feature]))
+
+    try:
+        client         = _get_gcv_client()
+        batch_response = client.batch_annotate_images(requests=requests_list)
+        responses      = batch_response.responses
+    except Exception as e:
+        print(f'[OCR/GCV] Batch API error: {e}')
+        return [([], True)] * len(tiles)
+
+    # Map responses back to original tile positions; encoding failures stay ([], True)
+    output = [([], True) for _ in range(len(tiles))]
+    for resp_idx, tile_idx in enumerate(valid_tile_indices):
+        ann = responses[resp_idx]
+        if ann.error.message:
+            print(f'[OCR/GCV] Batch item {resp_idx} error: {ann.error.message}')
+            output[tile_idx] = ([], True)
+        else:
+            dets = _parse_gcv_full_text(ann.full_text_annotation, confidence_threshold)
+            output[tile_idx] = (dets, False)
+
+    return output
+
+
 def ocr_tile_gcv(tile: np.ndarray, confidence_threshold: float = 0.3):
     """
     Run Google Cloud Vision DOCUMENT_TEXT_DETECTION on a single tile.
@@ -89,44 +189,7 @@ def ocr_tile_gcv(tile: np.ndarray, confidence_threshold: float = 0.3):
         print(f'[OCR/GCV] Response error: {response.error.message}')
         return [], True  # real error → signal fallback
 
-    full_text = response.full_text_annotation
-    if not full_text or not full_text.pages:
-        return [], False  # blank tile — GCV succeeded, just no text
-
-    detections = []
-
-    # Walk pages → blocks → paragraphs → words
-    for page in full_text.pages:
-        for block in page.blocks:
-            for para in block.paragraphs:
-                # Build word-level detections from paragraph words
-                for word in para.words:
-                    word_text = ''.join(s.text for s in word.symbols).strip()
-                    if not word_text:
-                        continue
-
-                    # Compute average per-symbol confidence for this word
-                    confidences = [s.confidence for s in word.symbols if s.confidence > 0]
-                    conf = sum(confidences) / len(confidences) if confidences else 0.85
-
-                    if conf < confidence_threshold:
-                        continue
-
-                    verts = word.bounding_box.vertices
-                    xs = [v.x for v in verts]
-                    ys = [v.y for v in verts]
-                    if not xs or not ys:
-                        continue
-
-                    detections.append({
-                        'text':       word_text,
-                        'confidence': round(float(conf), 4),
-                        'bbox':       [int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys))],
-                    })
-
-    # Empty list is fine — means this tile has no text (terrain, water, etc.)
-    # gcv_failed=False because GCV succeeded, just found nothing
-    return detections, False
+    return _parse_gcv_full_text(response.full_text_annotation, confidence_threshold), False
 
 
 def ocr_tile_easyocr(tile: np.ndarray, confidence_threshold: float = 0.3) -> List[Dict]:
@@ -224,8 +287,27 @@ def ocr_tile(
         # Many tiles on a map are legitimately blank (terrain, water, roads).
         # Falling back to EasyOCR on blank tiles = 30-60s per tile = hours of wasted time.
         if gcv_failed:
-            print('[OCR] GCV API error — falling back to EasyOCR for this tile...')
-            results = ocr_tile_easyocr(tile, confidence_threshold)
+            # Try backup service account before EasyOCR
+            import os as _os
+            from pathlib import Path as _Path
+            _root = _Path(__file__).parent.parent
+            _primary  = _root / 'service_account2.json'
+            _backup   = _root / 'Service_account_Backup.json'
+            _cur_creds = _os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '')
+            _on_primary = _primary.exists() and (str(_primary) in _cur_creds or 'service_account2' in _cur_creds)
+            if _on_primary and _backup.exists():
+                print(f'[OCR/GCV] ⚠️  Primary account failed — switching to backup: {_backup.name}')
+                _os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(_backup)
+                _reset_gcv_client()
+                results, gcv_failed = ocr_tile_gcv(tile, confidence_threshold)
+                # Restore primary for future tiles
+                _os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(_primary)
+                _reset_gcv_client()
+                if not gcv_failed:
+                    print(f'[OCR/GCV] ✅  Backup GCV account ({_backup.name}) succeeded.')
+            if gcv_failed:
+                print('[OCR/GCV] ❌  GCV failed on both accounts — falling back to EasyOCR for this tile...')
+                results = ocr_tile_easyocr(tile, confidence_threshold)
     elif engine == 'easyocr':
         results = ocr_tile_easyocr(tile, confidence_threshold)
     elif engine == 'tesseract':
