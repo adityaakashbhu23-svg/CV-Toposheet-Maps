@@ -158,13 +158,13 @@ def index():
 @app.route('/upload_service_account', methods=['POST'])
 def upload_service_account():
     f = request.files.get('json_file')
-    target = request.form.get('target', 'service_account.json')
+    target = request.form.get('target', 'service_account2.json')
     # Only allow safe filenames — must end in .json, no path traversal
     if not f or not f.filename.endswith('.json'):
         return json.dumps({'ok': False, 'error': 'Not a JSON file'}), 400
     safe_name = Path(target).name  # strip any path component
     if not safe_name.endswith('.json'):
-        safe_name = 'service_account.json'
+        safe_name = 'service_account2.json'
     dest = BASE_DIR / safe_name
     f.save(str(dest))
     # Update env so it takes effect immediately
@@ -315,14 +315,18 @@ def _stream_gen(filename, model, session_id):
     needs_gcp = (provider == 'vertex') or (ocr_engine == 'gcv')
     if needs_gcp:
         creds = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '').strip()
-        if not creds or not Path(creds).exists():
+        _root = Path(__file__).parent
+        _gcp_found = (creds and Path(creds).exists()) or \
+                     (_root / 'service_account2.json').exists() or \
+                     (_root / 'Service_account_Backup.json').exists()
+        if not _gcp_found:
             if provider == 'vertex':
                 detail = 'Vertex AI LLM + Google Cloud Vision OCR both require'
             else:
                 detail = 'Google Cloud Vision OCR requires'
             msg = (f'❌ No Google service-account JSON found. '
                    f'{detail} a GCP service account. '
-                   f'Please go to ⚙️ Settings, upload your service_account.json, and save before processing.')
+                   f'Please go to ⚙️ Settings, upload your service_account2.json, and save before processing.')
             yield f'data: {json.dumps({"msg": msg, "error": True})}\n\n'
             return
     # ── end API key check ────────────────────────────────────────────────────
@@ -1344,21 +1348,21 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
         <div class="key-row">
           <label>Service Account JSON Path</label>
           <div class="key-row-input">
-            <input type="text" id="inp_GOOGLE_APPLICATION_CREDENTIALS" placeholder="service_account.json">
+            <input type="text" id="inp_GOOGLE_APPLICATION_CREDENTIALS" placeholder="service_account2.json">
           </div>
         </div>
         <div class="upload-json-row">
           <label>Upload GCP Service Account JSON (OCR)</label>
-          <span class="upload-hint">Replaces <b>service_account.json</b> — used for Google Cloud Vision OCR</span>
+          <span class="upload-hint">Saves as <b>service_account2.json</b> - used for Google Cloud Vision OCR</span>
           <div style="display:flex;gap:8px;align-items:center;">
             <input type="file" id="gcv_json_file" accept=".json" style="font-size:0.8em;flex:1;">
-            <button class="upload-json-btn" onclick="uploadJsonFile('gcv_json_file','service_account.json','gcv_upload_status')">Upload</button>
+            <button class="upload-json-btn" onclick="uploadJsonFile('gcv_json_file','service_account2.json','gcv_upload_status')">Upload</button>
           </div>
           <span class="upload-status" id="gcv_upload_status"></span>
         </div>
         <div class="upload-json-row">
           <label>Upload GCP Service Account JSON (Vertex AI)</label>
-          <span class="upload-hint">Replaces <b>service_account2.json</b> — used for Vertex AI (Best Quality mode)</span>
+          <span class="upload-hint">Saves as <b>service_account2.json</b> - requires Vertex AI API enabled + <b>Vertex AI User</b> IAM role in GCP</span>
           <div style="display:flex;gap:8px;align-items:center;">
             <input type="file" id="vertex_json_file" accept=".json" style="font-size:0.8em;flex:1;">
             <button class="upload-json-btn" onclick="uploadJsonFile('vertex_json_file','service_account2.json','vertex_upload_status')">Upload</button>

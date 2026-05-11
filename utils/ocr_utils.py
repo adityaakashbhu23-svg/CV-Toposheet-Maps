@@ -55,7 +55,7 @@ def ocr_tile_gcv(tile: np.ndarray, confidence_threshold: float = 0.3):
     - Handles curved and overlapping text labels more accurately
 
     Authentication is handled via the GOOGLE_APPLICATION_CREDENTIALS env-var,
-    which config.py sets to the absolute path of service_account.json before
+    which config.py sets to the absolute path of service_account2.json (or Service_account_Backup.json) before
     any OCR code runs.
 
     Returns:

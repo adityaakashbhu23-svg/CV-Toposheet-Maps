@@ -661,7 +661,7 @@ def _classify_local(text: str) -> tuple:
 
 
 # ─────────────────────────────────────────────────────────────
-#  Vertex AI (Google Cloud — uses service_account.json, billed to GCP credit)
+#  Vertex AI (Google Cloud — uses service_account2.json, billed to GCP credit)
 # ─────────────────────────────────────────────────────────────
 
 def clean_with_vertex(
@@ -673,7 +673,7 @@ def clean_with_vertex(
 ) -> List[Dict]:
     """
     Send raw OCR texts to Vertex AI Gemini for cleaning and classification.
-    Uses service_account.json (GOOGLE_APPLICATION_CREDENTIALS) — billed to GCP credit.
+    Uses service_account2.json (GOOGLE_APPLICATION_CREDENTIALS) — billed to GCP credit.
     Raises QuotaExhaustedError on quota/rate-limit failures.
     """
     try:
