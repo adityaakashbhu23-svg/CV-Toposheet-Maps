@@ -33,7 +33,7 @@ LLM_ENSEMBLE_WORKERS = int(os.getenv('LLM_ENSEMBLE_WORKERS', _default_workers))
 # Model names
 OPENAI_MODEL    = os.getenv('OPENAI_MODEL',  'gpt-4o-mini')
 GEMINI_MODEL    = os.getenv('GEMINI_MODEL',  'gemini-2.5-flash')
-CLAUDE_MODEL    = os.getenv('CLAUDE_MODEL',  'claude-3-5-haiku-20241022')
+CLAUDE_MODEL    = os.getenv('CLAUDE_MODEL',  'claude-haiku-4-5')
 GROQ_MODEL      = os.getenv('GROQ_MODEL',    'llama-3.3-70b-versatile')
 
 # Vertex AI (Google Cloud — uses service_account2.json, billed to GCP credit)

@@ -15,6 +15,7 @@
 import sys
 import csv
 import html
+import json
 import re
 import sqlite3
 from pathlib import Path
@@ -75,7 +76,8 @@ def fetch_rows(map_filter: str = '', type_filter: str = '') -> list:
     cur = conn.cursor()
 
     query = """
-        SELECT feature_name, original_text, grid_reference, map_name, feature_type, confidence
+        SELECT feature_name, original_text, grid_reference, map_name, feature_type, confidence,
+               sheet_ref, district, survey_year
         FROM features
         WHERE 1=1
     """
@@ -100,7 +102,10 @@ def export_csv(rows: list):
         writer = csv.writer(f)
         writer.writerow(['As Written on Map', 'Normalised Name', 'Grid Number', 'Map Number', 'Map Name', 'Year', 'Feature Type', 'Confidence'])
         for r in rows:
-            map_number, map_name, year = parse_map_name(r['map_name'])
+            _, map_name, year_fn = parse_map_name(r['map_name'])
+            # Prefer the OCR-verified sheet_ref stored in DB; fall back to filename parse
+            map_number = r.get('sheet_ref') or parse_map_name(r['map_name'])[0]
+            year = str(r.get('survey_year') or year_fn or '')
             original = r.get('original_text') or r['feature_name']
             writer.writerow([
                 original,
@@ -132,25 +137,31 @@ def export_html(rows: list, map_filter: str = '', type_filter: str = ''):
     sorted_keys = sorted(map_stats.keys())
     total_maps  = len(sorted_keys)
 
-    # ── table rows (with data-* attrs for JS filtering / compare) ──────────
-    table_rows_html = ''
+    # ── row data as JSON array for virtual rendering ──────────────────────
+    # Each item: [mk, ft, fn_lower, txt, display_name, grid, mapnum, mapname, year, conf_str, conf_color]
+    rows_data = []
     for r in rows:
-        map_number, map_name, year = parse_map_name(r['map_name'])
+        _, map_name, year_fn = parse_map_name(r['map_name'])
+        # Prefer the OCR-verified sheet_ref stored in DB; fall back to filename parse
+        map_number = r.get('sheet_ref') or parse_map_name(r['map_name'])[0]
+        year = str(r.get('survey_year') or year_fn or '')
         conf = float(r['confidence'])
         conf_color = '#2d6a2d' if conf >= 0.85 else ('#b8860b' if conf >= 0.70 else '#8b0000')
-        mapkey    = html.escape(r['map_name'])
-        safe_name = html.escape(r['feature_name'])
-        table_rows_html += (
-            f'<tr data-mk="{mapkey}" data-ft="{r["feature_type"]}" data-fn="{safe_name.lower()}">'
-            f'<td><strong>{html.escape(r["feature_name"])}</strong></td>'
-            f'<td>{r["grid_reference"] or "-"}</td>'
-            f'<td>{map_number}</td>'
-            f'<td>{map_name}</td>'
-            f'<td>{year}</td>'
-            f'<td><span class="badge badge-{r["feature_type"]}">{r["feature_type"]}</span></td>'
-            f'<td style="color:{conf_color}">{conf:.2f}</td>'
-            f'</tr>\n'
-        )
+        search_txt = f"{r['feature_name']} {r['grid_reference'] or ''} {map_number} {map_name} {year} {r['feature_type']}".lower()
+        rows_data.append([
+            r['map_name'],                   # 0: mk
+            r['feature_type'],               # 1: ft
+            r['feature_name'].lower(),       # 2: fn_lower
+            search_txt,                      # 3: txt
+            html.escape(r['feature_name']), # 4: display_name
+            r['grid_reference'] or '-',      # 5: grid
+            map_number,                      # 6: mapnum
+            map_name,                        # 7: mapname
+            year,                            # 8: year
+            f"{conf:.2f}",                   # 9: conf_str
+            conf_color,                      # 10: conf_color
+        ])
+    rows_json = json.dumps(rows_data, ensure_ascii=False)
 
     # ── sidebar checkboxes ────────────────────────────────────────────────
     checkboxes_html = ''
@@ -332,10 +343,9 @@ tr:hover td {{ background:#f5f8ff; }}
             <th>Map Name</th><th>Year</th><th>Feature Type</th><th>Confidence</th>
           </tr>
         </thead>
-        <tbody id="tBody">
-{table_rows_html}
-        </tbody>
+        <tbody id="tBody"></tbody>
       </table>
+      <div id="pageHint" style="text-align:center;padding:7px 14px;background:#fff8e1;color:#856404;font-size:0.78em;border-top:1px solid #ffe082;display:none"></div>
       <div class="no-rows" id="noRows" style="display:{'none' if rows else ''}">No features have been extracted yet. Try processing a map first.</div>
     </div>
   </div>
@@ -357,35 +367,62 @@ tr:hover td {{ background:#f5f8ff; }}
 </div><!-- layout -->
 
 <script>
-var allRows = Array.from(document.querySelectorAll('#tBody tr'));
+/* ── Data: all rows as JS array, never rendered all at once ── */
+var DATA = {rows_json};
+/* columns: [mk,ft,fn_lower,txt,display_name,grid,mapnum,mapname,year,conf_str,conf_color] */
+var PAGE_SIZE = 2000;
+var filteredData = [];
 
-/* ── Filters ──────────────────────────────────────────────────────── */
+/* ── Helpers ──────────────────────────────────────────────────────── */
 function getChecked() {{
-  return Array.from(document.querySelectorAll('.map-cb:checked')).map(cb => cb.value);
+  return Array.from(document.querySelectorAll('.map-cb:checked')).map(function(cb) {{ return cb.value; }});
+}}
+function esc(s) {{
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }}
 
+/* ── Render: only PAGE_SIZE rows go to DOM ───────────────────────── */
+function renderTable() {{
+  var slice = filteredData.slice(0, PAGE_SIZE);
+  var h = '';
+  for (var i = 0; i < slice.length; i++) {{
+    var r = slice[i];
+    h += '<tr><td><strong>' + esc(r[4]) + '</strong></td>'
+       + '<td>' + esc(r[5]) + '</td>'
+       + '<td>' + (r[6]||'<span style="color:#bbb">-</span>') + '</td>'
+       + '<td>' + esc(r[7]) + '</td>'
+       + '<td>' + (r[8]||'<span style="color:#bbb">-</span>') + '</td>'
+       + '<td><span class="badge badge-' + r[1] + '">' + r[1] + '</span></td>'
+       + '<td style="color:' + r[10] + '">' + r[9] + '</td></tr>';
+  }}
+  document.getElementById('tBody').innerHTML = h;
+  document.getElementById('rowCnt').textContent = filteredData.length.toLocaleString() + ' rows';
+  var hint = document.getElementById('pageHint');
+  if (filteredData.length > PAGE_SIZE) {{
+    hint.textContent = 'Showing first ' + PAGE_SIZE.toLocaleString() + ' of ' + filteredData.length.toLocaleString() + ' — refine search to see fewer';
+    hint.style.display = '';
+  }} else {{ hint.style.display = 'none'; }}
+  var noRows = document.getElementById('noRows');
+  if (filteredData.length === 0) {{
+    noRows.textContent = DATA.length === 0
+      ? 'No features extracted yet. Process a map first.'
+      : 'No matching features found.';
+    noRows.style.display = '';
+  }} else {{ noRows.style.display = 'none'; }}
+}}
+
+/* ── Filters ──────────────────────────────────────────────────────── */
 function applyFilters() {{
   var search  = (document.getElementById('search').value || '').toLowerCase().trim();
   var typeVal = document.getElementById('typeFilter').value;
   var checked = new Set(getChecked());
-  var vis = 0;
-  allRows.forEach(function(row) {{
-    var show = checked.has(row.dataset.mk);
-    if (show && typeVal  && row.dataset.ft !== typeVal) show = false;
-    if (show && search   && !row.innerText.toLowerCase().includes(search)) show = false;
-    row.style.display = show ? '' : 'none';
-    if (show) vis++;
+  filteredData = DATA.filter(function(r) {{
+    if (!checked.has(r[0])) return false;
+    if (typeVal && r[1] !== typeVal) return false;
+    if (search  && r[3].indexOf(search) === -1) return false;
+    return true;
   }});
-  document.getElementById('rowCnt').textContent = vis.toLocaleString() + ' rows';
-  var noRows = document.getElementById('noRows');
-  if (vis === 0) {{
-    noRows.textContent = allRows.length === 0
-      ? 'No features have been extracted yet. Try processing a map first.'
-      : 'No matching features found.';
-    noRows.style.display = '';
-  }} else {{
-    noRows.style.display = 'none';
-  }}
+  renderTable();
 }}
 
 function onToggle() {{
@@ -394,53 +431,12 @@ function onToggle() {{
   var hint = document.getElementById('cmpHint');
   if (btn)  btn.disabled = n < 2;
   if (hint) hint.textContent = n < 2 ? 'Check 2+ maps to compare' : n + ' maps selected \u2014 click Compare';
-  try {{ applyFilters(); }} catch(e) {{}}
+  applyFilters();
 }}
 
 function setAll(v) {{
   document.querySelectorAll('.map-cb').forEach(function(cb) {{ cb.checked = v; }});
   onToggle();
-}}
-
-function deleteSelected() {{
-  var keys = getChecked();
-  if (keys.length === 0) {{ alert('No maps selected. Please check at least one map first.'); return; }}
-  var names = keys.slice(0, 5).join('\\n') + (keys.length > 5 ? '\\n... and ' + (keys.length - 5) + ' more' : '');
-  if (!confirm('Permanently delete ' + keys.length + ' map(s) and ALL their extracted data?\\n\\n' + names)) return;
-
-  function removeDom() {{
-    keys.forEach(function(mk) {{
-      document.querySelectorAll('.map-cb').forEach(function(cb) {{
-        if (cb.value === mk) cb.closest('label').remove();
-      }});
-      allRows = allRows.filter(function(row) {{
-        if (row.dataset.mk === mk) {{ row.remove(); return false; }}
-        return true;
-      }});
-    }});
-    onToggle();
-    applyFilters();
-  }}
-
-  fetch('http://localhost:5000/delete_maps', {{
-    method: 'POST',
-    headers: {{'Content-Type': 'application/json'}},
-    body: JSON.stringify({{maps: keys}})
-  }})
-  .then(function(r) {{ return r.json(); }})
-  .then(function(d) {{
-    if (d.ok) {{
-      removeDom();
-      alert('\u2714 Deleted ' + keys.length + ' map(s) from database.');
-    }} else {{
-      alert('Error: ' + (d.error || 'Unknown'));
-    }}
-  }})
-  .catch(function() {{
-    // Server not reachable (opened via file://) — remove from view only
-    removeDom();
-    alert('Removed from view.\\nTo permanently delete from database, open via http://localhost:5000/results');
-  }});
 }}
 
 function clearFilters() {{
@@ -450,12 +446,17 @@ function clearFilters() {{
 }}
 
 function downloadCSV() {{
-  var vis = allRows.filter(function(r) {{ return r.style.display !== 'none'; }});
   var lines = ['\uFEFF"Extracted Text","Grid Number","Map Number","Map Name","Year","Feature Type","Confidence"'];
-  vis.forEach(function(row) {{
-    var c = row.querySelectorAll('td');
-    var cols = Array.from(c).map(function(td) {{ return '"' + td.textContent.trim().replace(/"/g, '""') + '"'; }});
-    lines.push(cols.join(','));
+  filteredData.forEach(function(r) {{
+    lines.push(
+      '"' + r[4].replace(/"/g,'""') + '",'
+      + '"' + (r[5]||'').replace(/"/g,'""') + '",'
+      + '"' + (r[6]||'').replace(/"/g,'""') + '",'
+      + '"' + (r[7]||'').replace(/"/g,'""') + '",'
+      + '"' + (r[8]||'').replace(/"/g,'""') + '",'
+      + '"' + r[1] + '",'
+      + '"' + r[9] + '"'
+    );
   }});
   var blob = new Blob([lines.join('\\n')], {{type:'text/csv;charset=utf-8;'}});
   var url = URL.createObjectURL(blob);
@@ -463,127 +464,106 @@ function downloadCSV() {{
   URL.revokeObjectURL(url);
 }}
 
-/* ── Compare ──────────────────────────────────────────────────────── */
-function esc(s) {{
-  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function deleteSelected() {{
+  var keys = getChecked();
+  if (keys.length === 0) {{ alert('No maps selected.'); return; }}
+  var names = keys.slice(0,5).join('\\n') + (keys.length > 5 ? '\\n... and ' + (keys.length-5) + ' more' : '');
+  if (!confirm('Permanently delete ' + keys.length + ' map(s) and ALL their data?\\n\\n' + names)) return;
+  var keySet = new Set(keys.map(function(k) {{ return k.trim(); }}));
+  function removeDom() {{
+    for (var i = DATA.length - 1; i >= 0; i--) {{ if (keySet.has(DATA[i][0].trim())) DATA.splice(i,1); }}
+    keys.forEach(function(mk) {{
+      document.querySelectorAll('.map-cb').forEach(function(cb) {{ if (cb.value === mk) cb.closest('label').remove(); }});
+    }});
+    onToggle();
+  }}
+  fetch('http://localhost:5000/delete_maps', {{
+    method:'POST', headers:{{'Content-Type':'application/json'}},
+    body: JSON.stringify({{maps:keys}})
+  }})
+  .then(function(r) {{ return r.json(); }})
+  .then(function(d) {{
+    if (d.ok) {{ removeDom(); alert('\u2714 Deleted ' + keys.length + ' map(s).'); }}
+    else {{ alert('Error: ' + (d.error||'Unknown')); }}
+  }})
+  .catch(function() {{ removeDom(); alert('Removed from view.\\nOpen via http://localhost:5000/results to persist.'); }});
 }}
 
+/* ── Compare (works on full DATA array — no DOM scanning) ─────────── */
 function runCompare() {{
-  var maps = getChecked();
+  var maps = getChecked().map(function(m) {{ return m.trim(); }});
   if (maps.length < 2) {{ alert('Please select at least 2 maps to compare.'); return; }}
   try {{
-
-  /* build per-map data — trim keys so whitespace differences don't break matching */
+  var mapSet = new Set(maps);
   var data = {{}};
-  maps = maps.map(function(m) {{ return m.trim(); }});
-  maps.forEach(function(mk) {{ data[mk] = {{ names: new Set(), rows: [] }}; }});
-  allRows.forEach(function(row) {{
-    var mk = (row.dataset.mk || '').trim();
-    if (data[mk]) {{
-      var fn = (row.dataset.fn || '').trim();
-      if (fn) data[mk].names.add(fn);
-      data[mk].rows.push(row);
-    }}
+  maps.forEach(function(mk) {{ data[mk] = {{ names: new Set(), rows:[] }}; }});
+  DATA.forEach(function(r) {{
+    var mk = r[0].trim();
+    if (mapSet.has(mk)) {{ if (r[2]) data[mk].names.add(r[2]); data[mk].rows.push(r); }}
   }});
-
-  /* common = name in ALL maps */
   var common = null;
   maps.forEach(function(mk) {{
     if (common === null) {{ common = new Set(data[mk].names); }}
-    else {{ common = new Set([...common].filter(x => data[mk].names.has(x))); }}
+    else {{ var x = new Set(); common.forEach(function(n) {{ if (data[mk].names.has(n)) x.add(n); }}); common = x; }}
   }});
-
-  /* unique per map */
   var unique = {{}};
   maps.forEach(function(mk) {{
-    unique[mk] = new Set([...data[mk].names].filter(x => !common.has(x)));
+    unique[mk] = new Set();
+    data[mk].names.forEach(function(n) {{ if (!common.has(n)) unique[mk].add(n); }});
   }});
-
-  /* ── summary bar ── */
   var sumHTML = '<div class="cp-stat common"><div class="csn">' + common.size + '</div><div class="csl">Common Features</div></div>';
-  maps.forEach(function(mk) {{
-    sumHTML += '<div class="cp-stat uniq"><div class="csn">' + unique[mk].size + '</div><div class="csl">Only in ' + esc(mk) + '</div></div>';
-  }});
+  maps.forEach(function(mk) {{ sumHTML += '<div class="cp-stat uniq"><div class="csn">' + unique[mk].size + '</div><div class="csl">Only in ' + esc(mk) + '</div></div>'; }});
   document.getElementById('cpSummary').innerHTML = sumHTML;
-
-  /* ── tabs ── */
   var tabsHTML = '<div class="cp-tab active" data-sec="sec-common">&#10003; Common (' + common.size + ')</div>';
-  maps.forEach(function(mk) {{
-    var sid = 'sec-u-' + mk.replace(/[^a-z0-9]/gi, '-');
-    tabsHTML += '<div class="cp-tab" data-sec="' + sid + '">Only: ' + esc(mk) + ' (' + unique[mk].size + ')</div>';
-  }});
+  maps.forEach(function(mk) {{ var sid='sec-u-'+mk.replace(/[^a-z0-9]/gi,'-'); tabsHTML += '<div class="cp-tab" data-sec="'+sid+'">Only: '+esc(mk)+' ('+unique[mk].size+')</div>'; }});
   document.getElementById('cpTabs').innerHTML = tabsHTML;
-  document.getElementById('cpTabs').querySelectorAll('.cp-tab').forEach(function(tab) {{
-    tab.addEventListener('click', function() {{ showTab(this, this.dataset.sec); }});
-  }});
-
-  /* ── sections ── */
-  var bodyHTML = '';
-
-  /* Common section */
-  bodyHTML += '<div class="cp-sec active" id="sec-common">';
-  bodyHTML += '<h3>Features found in ALL ' + maps.length + ' selected maps \u2014 ' + common.size + ' common feature(s)</h3>';
-  if (common.size === 0) {{
-    bodyHTML += '<div class="empty-msg">No features with identical names across all selected maps.</div>';
-  }} else {{
-    bodyHTML += '<table class="cp-tbl"><thead><tr><th>Feature Name</th><th>Present in Maps</th></tr></thead><tbody>';
-    [...common].sort().forEach(function(fn) {{
-      var mapList = maps.filter(mk => data[mk].names.has(fn)).join(', ');
-      bodyHTML += '<tr class="row-common"><td><strong>' + esc(fn) + '</strong></td><td>' + esc(mapList) + '</td></tr>';
-    }});
+  document.getElementById('cpTabs').querySelectorAll('.cp-tab').forEach(function(tab) {{ tab.addEventListener('click', function() {{ showTab(this, this.dataset.sec); }}); }});
+  var bodyHTML = '<div class="cp-sec active" id="sec-common"><h3>Features in ALL '+maps.length+' maps \u2014 '+common.size+' common</h3>';
+  if (common.size===0) {{ bodyHTML += '<div class="empty-msg">No common features.</div>'; }}
+  else {{
+    bodyHTML += '<table class="cp-tbl"><thead><tr><th>Feature Name</th><th>In Maps</th></tr></thead><tbody>';
+    Array.from(common).sort().forEach(function(fn) {{ var ml=maps.filter(function(mk){{return data[mk].names.has(fn);}}).join(', '); bodyHTML+='<tr class="row-common"><td><strong>'+esc(fn)+'</strong></td><td>'+esc(ml)+'</td></tr>'; }});
     bodyHTML += '</tbody></table>';
   }}
   bodyHTML += '</div>';
-
-  /* Unique-per-map sections */
   maps.forEach(function(mk) {{
-    var sid = 'sec-u-' + mk.replace(/[^a-z0-9]/gi, '-');
-    bodyHTML += '<div class="cp-sec" id="' + sid + '">';
-    bodyHTML += '<h3>Features found ONLY in <em>' + esc(mk) + '</em> \u2014 not in other selected maps (' + unique[mk].size + ')</h3>';
-    if (unique[mk].size === 0) {{
-      bodyHTML += '<div class="empty-msg">Every feature in this map also appears in the other selected maps.</div>';
-    }} else {{
-      bodyHTML += '<table class="cp-tbl"><thead><tr><th>Feature Name</th><th>Grid</th><th>Type</th><th>Confidence</th></tr></thead><tbody>';
-      data[mk].rows.forEach(function(row) {{
-        if (!unique[mk].has((row.dataset.fn||'').trim())) return;
-        var c = row.querySelectorAll('td');
-        var name = c[0] ? c[0].textContent.trim() : '';
-        var grid = c[1] ? c[1].textContent.trim() : '';
-        var type = c[5] ? c[5].textContent.trim() : '';
-        var conf = c[6] ? c[6].textContent.trim() : '';
-        bodyHTML += '<tr class="row-unique"><td><strong>' + esc(name) + '</strong></td><td>' + esc(grid) + '</td><td>' + esc(type) + '</td><td>' + esc(conf) + '</td></tr>';
-      }});
+    var sid='sec-u-'+mk.replace(/[^a-z0-9]/gi,'-');
+    bodyHTML += '<div class="cp-sec" id="'+sid+'"><h3>Only in <em>'+esc(mk)+'</em> ('+unique[mk].size+')</h3>';
+    if (unique[mk].size===0) {{ bodyHTML+='<div class="empty-msg">Every feature also appears in other maps.</div>'; }}
+    else {{
+      bodyHTML += '<table class="cp-tbl"><thead><tr><th>Feature Name</th><th>Grid</th><th>Type</th><th>Conf</th></tr></thead><tbody>';
+      data[mk].rows.forEach(function(r) {{ if (!unique[mk].has(r[2])) return; bodyHTML+='<tr class="row-unique"><td><strong>'+esc(r[4])+'</strong></td><td>'+esc(r[5])+'</td><td>'+r[1]+'</td><td>'+r[9]+'</td></tr>'; }});
       bodyHTML += '</tbody></table>';
     }}
     bodyHTML += '</div>';
   }});
-
   document.getElementById('cpBody').innerHTML = bodyHTML;
-  document.getElementById('cpTag').textContent = 'Comparing ' + maps.length + ' maps';
-
+  document.getElementById('cpTag').textContent = 'Comparing '+maps.length+' maps';
   document.getElementById('mainView').style.display = 'none';
   document.getElementById('cmpPanel').style.display = 'flex';
-
-  }} catch(err) {{
-    alert('Compare error: ' + err.message + '\n\nTry selecting fewer maps or reload the page.');
-  }}
+  }} catch(err) {{ alert('Compare error: '+err.message); }}
 }}
 
 function closeCompare() {{
   document.getElementById('cmpPanel').style.display = 'none';
   document.getElementById('mainView').style.display = 'flex';
 }}
-
 function showTab(el, secId) {{
-  document.querySelectorAll('.cp-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.cp-tab').forEach(function(t) {{ t.classList.remove('active'); }});
   el.classList.add('active');
-  document.querySelectorAll('.cp-sec').forEach(s => s.classList.remove('active'));
-  var sec = document.getElementById(secId);
-  if (sec) sec.classList.add('active');
+  document.querySelectorAll('.cp-sec').forEach(function(s) {{ s.classList.remove('active'); }});
+  var sec = document.getElementById(secId); if (sec) sec.classList.add('active');
 }}
-
 /* init */
-onToggle();
+filteredData = DATA.slice();
+renderTable();
+(function() {{
+  var _n = document.querySelectorAll('.map-cb').length;
+  var _btn = document.getElementById('cmpBtn');
+  var _hint = document.getElementById('cmpHint');
+  if (_btn)  _btn.disabled  = _n < 2;
+  if (_hint) _hint.textContent = _n >= 2 ? _n + ' maps selected \u2014 click Compare' : 'Check 2+ maps to compare';
+}})();
 </script>
 </body>
 </html>"""

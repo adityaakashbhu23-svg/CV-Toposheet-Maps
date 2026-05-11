@@ -831,7 +831,7 @@ body { min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; b
         <input type="radio" name="model_sel" value="gemini">
         <div class="mc-body">
           <div class="mc-name">7. Gemini API <span class="badge badge-gemini">GEMINI KEY</span></div>
-          <div class="mc-desc">GCV OCR + Gemini 2.5 Flash</div>
+          <div class="mc-desc">GCV OCR + Gemini 1.5 Flash</div>
         </div>
       </label>
       <label class="model-card" onclick="selectCard(this)" data-model="offline">
@@ -1319,7 +1319,7 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
         <div class="key-row">
           <label>Claude Model</label>
           <div class="key-row-input">
-            <input type="text" id="inp_CLAUDE_MODEL" placeholder="claude-3-5-haiku-20241022">
+            <input type="text" id="inp_CLAUDE_MODEL" placeholder="claude-haiku-4-5">
           </div>
         </div>
         <div class="key-row">

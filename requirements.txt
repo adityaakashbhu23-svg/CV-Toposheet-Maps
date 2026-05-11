@@ -20,6 +20,7 @@ google-cloud-vision>=3.7.0
 openai>=1.30.0
 google-genai>=1.0.0
 anthropic>=0.30.0
+groq>=0.9.0
 
 # Database
 # sqlite3 is built-in to Python — no install needed

@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS features (
     lon_max         REAL,
     sheet_ref       TEXT,    -- SOI canonical ref e.g. "72P/16"
     district        TEXT,    -- district name from filename
-    survey_year     INTEGER, -- year map was surveyed/published
+    survey_year     TEXT,    -- year map was surveyed/published (e.g. "1934-35" or "1972")
     map_scale       INTEGER, -- 63360 (1-inch) or 50000 or 25000
     verified        INTEGER DEFAULT 0   -- 0=unverified, 1=human-confirmed correct
 );

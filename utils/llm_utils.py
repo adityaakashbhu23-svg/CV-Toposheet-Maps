@@ -255,35 +255,41 @@ def clean_with_openai(
         print('[LLM] openai package not installed. Run: pip install openai')
         return []
 
-    client = OpenAI(api_key=api_key, max_retries=0)  # fail fast on 429
+    client = OpenAI(api_key=api_key, max_retries=0)
     all_results = []
-    rate_limited = False
+    total_batches = (len(raw_texts) + batch_size - 1) // batch_size
 
     for start in range(0, len(raw_texts), batch_size):
-        if rate_limited:
-            break
         batch = raw_texts[start:start + batch_size]
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {'role': 'system', 'content': SYSTEM_PROMPT},
-                    {'role': 'user',   'content': _build_user_message(batch)},
-                ],
-                temperature=0.1,
-                max_tokens=8192,
-            )
-            content = response.choices[0].message.content
-            parsed = _parse_llm_json(content)
-            all_results.extend(parsed)
-            print(f'[LLM/OpenAI] Batch {start//batch_size + 1}: {len(parsed)} features')
-        except Exception as e:
-            err_str = str(e)
-            if '429' in err_str or 'rate' in err_str.lower() or 'quota' in err_str.lower() or 'billing' in err_str.lower():
-                print(f'[LLM/OpenAI] Rate-limited / quota exceeded: {e}')
-                rate_limited = True
-            else:
-                print(f'[LLM/OpenAI] Error: {e}')
+        batch_num = start // batch_size + 1
+        for attempt in range(3):
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {'role': 'system', 'content': SYSTEM_PROMPT},
+                        {'role': 'user',   'content': _build_user_message(batch)},
+                    ],
+                    temperature=0.1,
+                    max_tokens=16384,
+                )
+                content = response.choices[0].message.content
+                parsed = _parse_llm_json(content)
+                all_results.extend(parsed)
+                print(f'[LLM/OpenAI] Batch {batch_num}/{total_batches}: {len(parsed)} features')
+                break
+            except Exception as e:
+                err_str = str(e)
+                if '429' in err_str or 'rate' in err_str.lower() or 'quota' in err_str.lower():
+                    wait = 30 * (attempt + 1)
+                    print(f'[LLM/OpenAI] Rate-limited batch {batch_num} (attempt {attempt+1}/3), waiting {wait}s...')
+                    time.sleep(wait)
+                elif 'billing' in err_str.lower():
+                    print(f'[LLM/OpenAI] Billing error: {e}')
+                    return all_results
+                else:
+                    print(f'[LLM/OpenAI] Error: {e}')
+                    break
 
     return all_results
 
@@ -322,32 +328,39 @@ def clean_with_grok(
         max_retries=0,
     )
     all_results = []
+    total_batches = (len(raw_texts) + batch_size - 1) // batch_size
 
     for start in range(0, len(raw_texts), batch_size):
         batch = raw_texts[start:start + batch_size]
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {'role': 'system', 'content': SYSTEM_PROMPT},
-                    {'role': 'user',   'content': _build_user_message(batch)},
-                ],
-                temperature=0.1,
-                max_tokens=4096,
-            )
-            content = response.choices[0].message.content
-            parsed = _parse_llm_json(content)
-            all_results.extend(parsed)
-            print(f'[LLM/Grok] Batch {start//batch_size + 1}: {len(parsed)} features')
-        except Exception as e:
-            err_str = str(e)
-            if '401' in err_str or 'invalid' in err_str.lower():
-                print(f'[LLM/Grok] Invalid API key: {e}')
+        batch_num = start // batch_size + 1
+        for attempt in range(3):
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {'role': 'system', 'content': SYSTEM_PROMPT},
+                        {'role': 'user',   'content': _build_user_message(batch)},
+                    ],
+                    temperature=0.1,
+                    max_tokens=8192,
+                )
+                content = response.choices[0].message.content
+                parsed = _parse_llm_json(content)
+                all_results.extend(parsed)
+                print(f'[LLM/Grok] Batch {batch_num}/{total_batches}: {len(parsed)} features')
                 break
-            if '429' in err_str or 'quota' in err_str.lower() or 'rate' in err_str.lower():
-                print(f'[LLM/Grok] Quota/rate exceeded: {e}')
-                raise QuotaExhaustedError(f'Grok quota exhausted: {e}')
-            print(f'[LLM/Grok] Error: {e}')
+            except Exception as e:
+                err_str = str(e)
+                if '401' in err_str or 'invalid' in err_str.lower():
+                    print(f'[LLM/Grok] Invalid API key: {e}')
+                    return all_results
+                if '429' in err_str or 'quota' in err_str.lower() or 'rate' in err_str.lower():
+                    wait = 20 * (attempt + 1)
+                    print(f'[LLM/Grok] Rate-limited batch {batch_num} (attempt {attempt+1}/3), waiting {wait}s...')
+                    time.sleep(wait)
+                else:
+                    print(f'[LLM/Grok] Error: {e}')
+                    break
 
     return all_results
 
@@ -360,11 +373,14 @@ def clean_with_gemini(
     raw_texts: List[str],
     api_key: str,
     model: str = 'gemini-2.5-flash',
-    batch_size: int = 100
+    batch_size: int = 100,
+    api_key_2: str = ''
 ) -> List[Dict]:
     """
     Send raw OCR texts to Google Gemini for cleaning and classification.
-    Raises QuotaExhaustedError if every batch fails due to quota/rate-limit.
+    Accepts an optional second API key (api_key_2) — if key1 hits rate limits on a
+    batch after all retries, key2 is tried immediately for that same batch.
+    Raises QuotaExhaustedError only if BOTH keys are exhausted across all batches.
     """
     try:
         from google import genai
@@ -373,10 +389,11 @@ def clean_with_gemini(
         print('[LLM] google-genai not installed. Run: python -m pip install google-genai')
         return []
 
-    client = genai.Client(api_key=api_key)
+    keys = [k for k in [api_key, api_key_2] if k]
+    clients = {k: genai.Client(api_key=k) for k in keys}
 
     all_results = []
-    quota_errors = 0
+    total_quota_errors = 0
     total_batches = (len(raw_texts) + batch_size - 1) // batch_size
 
     try:
@@ -389,43 +406,56 @@ def clean_with_gemini(
         batch = raw_texts[start:start + batch_size]
         batch_num = start // batch_size + 1
         if start > 0:
-            time.sleep(_gemini_sleep)  # configurable via GEMINI_BATCH_SLEEP in .env
+            time.sleep(_gemini_sleep)
 
-        # Retry loop: up to 3 attempts per batch on rate limit
-        for attempt in range(3):
-            try:
-                response = client.models.generate_content(
-                    model=model,
-                    contents=_build_user_message(batch),
-                    config=genai_types.GenerateContentConfig(
-                        system_instruction=SYSTEM_PROMPT,
-                        temperature=0.1,
-                        max_output_tokens=16384,  # 80 items × ~150 tokens each needs ~12k
-                    ),
-                )
-                # gemini-2.5-flash returns parts; join non-thought text parts
-                parts = response.candidates[0].content.parts if response.candidates else []
-                content = ''.join(p.text for p in parts if p.text and not getattr(p, 'thought', False))
-                if not content and response.text:
-                    content = response.text  # fallback for older models
-                parsed = _parse_llm_json(content)
-                all_results.extend(parsed)
-                print(f'[LLM/Gemini] Batch {batch_num}/{total_batches}: {len(parsed)} features')
-                break  # success, move to next batch
-            except Exception as e:
-                err_str = str(e)
-                if '429' in err_str or 'quota' in err_str.lower() or 'rate' in err_str.lower():
-                    quota_errors += 1
-                    wait = 60 * (attempt + 1)  # 60s, 120s, 180s
-                    print(f'[LLM/Gemini] Rate limit on batch {batch_num} (attempt {attempt+1}/3), waiting {wait}s...')
-                    time.sleep(wait)
-                else:
-                    print(f'[LLM/Gemini] Error on batch {batch_num}: {e}')
-                    break  # non-rate-limit error, skip batch
+        batch_done = False
+        for key_idx, key in enumerate(keys, 1):
+            client = clients[key]
+            key_label = f'key{key_idx}'
+            # Retry loop: up to 3 attempts per key per batch on rate limit
+            for attempt in range(3):
+                try:
+                    response = client.models.generate_content(
+                        model=model,
+                        contents=_build_user_message(batch),
+                        config=genai_types.GenerateContentConfig(
+                            system_instruction=SYSTEM_PROMPT,
+                            temperature=0.1,
+                            max_output_tokens=16384,
+                        ),
+                    )
+                    parts = response.candidates[0].content.parts if response.candidates else []
+                    content = ''.join(p.text for p in parts if p.text and not getattr(p, 'thought', False))
+                    if not content and response.text:
+                        content = response.text
+                    parsed = _parse_llm_json(content)
+                    all_results.extend(parsed)
+                    key_suffix = f' ({key_label})' if len(keys) > 1 else ''
+                    print(f'[LLM/Gemini] Batch {batch_num}/{total_batches}: {len(parsed)} features{key_suffix}')
+                    batch_done = True
+                    break
+                except Exception as e:
+                    err_str = str(e)
+                    if '429' in err_str or 'quota' in err_str.lower() or 'rate' in err_str.lower():
+                        total_quota_errors += 1
+                        wait = 30 * (attempt + 1)  # 30s, 60s, 90s
+                        print(f'[LLM/Gemini] Rate limit on batch {batch_num} ({key_label} attempt {attempt+1}/3), waiting {wait}s...')
+                        time.sleep(wait)
+                    elif '503' in err_str or 'unavailable' in err_str.lower() or 'high demand' in err_str.lower():
+                        wait = 20 * (attempt + 1)  # 20s, 40s, 60s
+                        print(f'[LLM/Gemini] 503 on batch {batch_num} ({key_label} attempt {attempt+1}/3), waiting {wait}s...')
+                        time.sleep(wait)
+                    else:
+                        print(f'[LLM/Gemini] Error on batch {batch_num} ({key_label}): {e}')
+                        break  # non-retryable, skip to next key
+            if batch_done:
+                break
+            if key_idx < len(keys):
+                print(f'[LLM/Gemini] {key_label} exhausted for batch {batch_num}, switching to key{key_idx+1}...')
 
-    if quota_errors > 0 and not all_results:
+    if total_quota_errors > 0 and not all_results:
         raise QuotaExhaustedError(
-            f'Gemini quota exhausted ({quota_errors}/{total_batches} batches failed)'
+            f'Gemini quota exhausted on both keys ({total_quota_errors} rate-limit errors, 0 results)'
         )
 
     return all_results
@@ -438,7 +468,7 @@ def clean_with_gemini(
 def clean_with_claude(
     raw_texts: List[str],
     api_key: str,
-    model: str = 'claude-3-5-haiku-20241022',
+    model: str = 'claude-haiku-4-5',
     batch_size: int = 40
 ) -> List[Dict]:
     """
@@ -466,7 +496,7 @@ def clean_with_claude(
             try:
                 response = client.messages.create(
                     model=model,
-                    max_tokens=4096,
+                    max_tokens=8192,
                     system=SYSTEM_PROMPT,
                     messages=[
                         {'role': 'user', 'content': _build_user_message(batch)},
@@ -477,7 +507,7 @@ def clean_with_claude(
                 parsed = _parse_llm_json(content)
                 all_results.extend(parsed)
                 print(f'[LLM/Claude] Batch {batch_num}/{total_batches}: {len(parsed)} features')
-                time.sleep(1)  # paid tier — 1s gap is sufficient
+                time.sleep(1)
                 break
             except Exception as e:
                 err_str = str(e)
@@ -487,7 +517,7 @@ def clean_with_claude(
                     raise QuotaExhaustedError(f'Claude billing error: {e}')
                 elif '429' in err_str or 'rate' in err_str.lower() or 'overloaded' in err_str.lower():
                     retries += 1
-                    wait = 65 * retries
+                    wait = 30 * retries
                     print(f'[LLM/Claude] Rate-limited (batch {batch_num}), waiting {wait}s ... (retry {retries}/2)')
                     time.sleep(wait)
                 else:
@@ -538,30 +568,36 @@ def clean_with_groq(
 
     for start in range(0, len(raw_texts), batch_size):
         batch = raw_texts[start:start + batch_size]
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {'role': 'system', 'content': SYSTEM_PROMPT},
-                    {'role': 'user',   'content': _build_user_message(batch)},
-                ],
-                temperature=0.1,
-                max_tokens=4096,
-            )
-            content = response.choices[0].message.content
-            parsed = _parse_llm_json(content)
-            all_results.extend(parsed)
-            print(f'[LLM/Groq] Batch {start//batch_size + 1}/{total_batches}: {len(parsed)} features')
-        except Exception as e:
-            err_str = str(e)
-            if '401' in err_str or 'invalid_api_key' in err_str.lower() or 'invalid api key' in err_str.lower():
-                print(f'[LLM/Groq] Invalid API key — check GROQ_API_KEY in .env')
-                break  # no point retrying other batches
-            elif any(kw in err_str.lower() for kw in ('429', 'rate', 'quota', 'billing', 'limit')):
-                quota_errors += 1
-                print(f'[LLM/Groq] Rate-limited: {e}')
-            else:
-                print(f'[LLM/Groq] Error: {e}')
+        batch_num = start // batch_size + 1
+        for attempt in range(3):
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {'role': 'system', 'content': SYSTEM_PROMPT},
+                        {'role': 'user',   'content': _build_user_message(batch)},
+                    ],
+                    temperature=0.1,
+                    max_tokens=8192,
+                )
+                content = response.choices[0].message.content
+                parsed = _parse_llm_json(content)
+                all_results.extend(parsed)
+                print(f'[LLM/Groq] Batch {batch_num}/{total_batches}: {len(parsed)} features')
+                break
+            except Exception as e:
+                err_str = str(e)
+                if '401' in err_str or 'invalid_api_key' in err_str.lower() or 'invalid api key' in err_str.lower():
+                    print(f'[LLM/Groq] Invalid API key — check GROQ_API_KEY in .env')
+                    return all_results
+                elif any(kw in err_str.lower() for kw in ('429', 'rate', 'quota', 'billing', 'limit')):
+                    quota_errors += 1
+                    wait = 20 * (attempt + 1)
+                    print(f'[LLM/Groq] Rate-limited batch {batch_num} (attempt {attempt+1}/3), waiting {wait}s...')
+                    time.sleep(wait)
+                else:
+                    print(f'[LLM/Groq] Error: {e}')
+                    break
 
     if quota_errors > 0 and not all_results:
         raise QuotaExhaustedError(
@@ -843,22 +879,16 @@ def clean_with_llm(raw_texts: List[str]) -> List[Dict]:
 
     def _try_gemini(texts):
         mdl = getattr(config, 'GEMINI_MODEL', 'gemini-2.5-flash')
-        keys = [k for k in [
-            getattr(config, 'GEMINI_API_KEY', ''),
-            getattr(config, 'GEMINI_API_KEY_2', ''),
-        ] if k]
-        if not keys:
+        key1 = getattr(config, 'GEMINI_API_KEY', '')
+        key2 = getattr(config, 'GEMINI_API_KEY_2', '')
+        if not key1 and not key2:
             return None
-        for idx, key in enumerate(keys, 1):
-            try:
-                r = clean_with_gemini(texts, key, mdl)
-                if r:
-                    return r
-            except QuotaExhaustedError as e:
-                print(f'[LLM] Gemini key {idx} exhausted: {e}')
-                if idx < len(keys):
-                    print(f'[LLM] Trying Gemini key {idx + 1}...')
-        return None
+        try:
+            r = clean_with_gemini(texts, key1 or key2, mdl, api_key_2=key2 if key1 else '')
+            return r if r else None
+        except QuotaExhaustedError as e:
+            print(f'[LLM] Gemini both keys exhausted: {e}')
+            return None
 
     def _try_openai(texts):
         key = getattr(config, 'OPENAI_API_KEY', '')
@@ -888,18 +918,15 @@ def clean_with_llm(raw_texts: List[str]) -> List[Dict]:
         print(f'[LLM] Unknown provider "{provider}". Valid: grok, groq, claude, gemini, openai, local')
         return clean_with_local(raw_texts)
 
-    # Primary first, then remaining order, local always last
+    # Use ONLY the selected provider — no silent fallback to other LLMs.
+    # (For Gemini, key1→key2 retry is handled inside _try_gemini itself.)
     primary = _named[provider]
-    fallbacks = [f for f in _all if f is not primary]
-    order = [primary] + fallbacks
+    result = primary(raw_texts)
+    if result is not None:
+        return result
 
-    for attempt in order:
-        result = attempt(raw_texts)
-        if result is not None:
-            return result
-        print('[LLM] Provider unavailable, trying next fallback...')
-
-    # Should never reach here since _try_local always returns
+    # Provider returned nothing — raw passthrough so data is not lost
+    print(f'[LLM] Provider "{provider}" failed. Returning raw OCR text (no other LLM used).')
     return _raw_passthrough(raw_texts)
 
 
@@ -955,7 +982,7 @@ def clean_with_ensemble(raw_texts: List[str], max_workers: int = 6) -> List[Dict
     # Claude (Anthropic)
     if getattr(config, 'CLAUDE_API_KEY', ''):
         _ck = config.CLAUDE_API_KEY
-        _cm = getattr(config, 'CLAUDE_MODEL', 'claude-3-5-haiku-20241022')
+        _cm = getattr(config, 'CLAUDE_MODEL', 'claude-haiku-4-5')
         jobs.append(('claude', lambda t, k=_ck, m=_cm: clean_with_claude(t, k, m)))
 
     # Groq (Llama)

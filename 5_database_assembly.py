@@ -42,6 +42,7 @@ def build_database() -> None:
 
     # Load cell coordinates from grid detection if available
     cell_coords_all: dict = {}   # map_name → {grid_ref → {lat_min,...}}
+    grid_data: dict = {}         # map_name → full grid entry (for ocr_map_number etc.)
     if GRID_PATH.exists():
         with open(GRID_PATH, encoding='utf-8') as f:
             grid_data = json.load(f)
@@ -63,9 +64,16 @@ def build_database() -> None:
 
         # Parse sheet metadata (block, district, year, scale) from filename
         meta = parse_soi_filename(map_name)
-        sheet_ref   = meta.get('sheet_ref')
+        # Use OCR-detected map number (from top-right corner) — it is the only
+        # authoritative source.  Never fall back to the filename, which may be
+        # mislabelled.  If corner detection failed, sheet_ref stays blank.
+        ocr_map_number  = grid_data.get(map_name, {}).get('ocr_map_number', '')
+        ocr_survey_year = grid_data.get(map_name, {}).get('ocr_survey_year', '')
+        sheet_ref   = ocr_map_number or ''
         district    = meta.get('district') or ''
-        survey_year = meta.get('year')
+        # Use OCR-detected year from the map's top margin (authoritative).
+        # Never fall back to the filename year, which may be mislabelled.
+        survey_year = ocr_survey_year or ''
         map_scale   = meta.get('scale_guess')
 
         # Flatten bbox into individual columns + attach coordinates per cell

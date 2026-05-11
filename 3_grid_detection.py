@@ -105,6 +105,298 @@ OCR_CORRECTIONS = {
     'G': '6',   # G misread as 6
 }
 
+YEAR_VALUE_RE = re.compile(r'(?<!\d)(\d{4}(?:[-–]\d{2,4})?)(?!\d)')
+
+
+def _normalize_year_value(raw: str) -> str:
+    raw = (raw or '').strip().rstrip('.,;:').replace('–', '-')
+    m = re.match(r'^(\d{4})-(\d{2,4})$', raw)
+    if m:
+        start = int(m.group(1))
+        end_raw = m.group(2)
+        end = int(end_raw if len(end_raw) == 4 else f'{m.group(1)[:2]}{end_raw}')
+        if 1500 <= start <= 2100 and 1500 <= end <= 2100 and start <= end <= start + 20:
+            return f'{start}-{str(end)[2:]}'
+        return ''
+
+    m = re.match(r'^(\d{4})$', raw)
+    if m:
+        year = int(m.group(1))
+        if 1500 <= year <= 2100:
+            return m.group(1)
+    return ''
+
+
+def _group_ocr_lines(detections: List[Dict]) -> List[Dict]:
+    items = []
+    for d in detections:
+        text = d.get('text', '').strip()
+        bbox = d.get('bbox') or []
+        if not text or len(bbox) != 4:
+            continue
+        bx1, by1, bx2, by2 = bbox
+        cy = (by1 + by2) / 2
+        h = max(by2 - by1, 1)
+        items.append({
+            'text': text,
+            'bbox': [bx1, by1, bx2, by2],
+            'x': bx1,
+            'cy': cy,
+            'h': h,
+        })
+
+    items.sort(key=lambda item: (item['cy'], item['x']))
+    lines: List[Dict] = []
+    for item in items:
+        if not lines:
+            lines.append({'items': [item], 'cy': item['cy'], 'avg_h': item['h']})
+            continue
+
+        last = lines[-1]
+        tol = max(last['avg_h'], item['h']) * 0.8
+        if abs(item['cy'] - last['cy']) <= tol:
+            last['items'].append(item)
+            count = len(last['items'])
+            last['cy'] = ((last['cy'] * (count - 1)) + item['cy']) / count
+            last['avg_h'] = ((last['avg_h'] * (count - 1)) + item['h']) / count
+        else:
+            lines.append({'items': [item], 'cy': item['cy'], 'avg_h': item['h']})
+
+    grouped = []
+    for line in lines:
+        ordered = sorted(line['items'], key=lambda item: item['x'])
+        grouped.append({
+            'text': ' '.join(item['text'] for item in ordered),
+            'cy': line['cy'],
+            'avg_h': line['avg_h'],
+        })
+    return grouped
+
+
+def _score_year_candidate(context: str, year_value: str, line_cy: float, img_height: int) -> int:
+    context = context.lower()
+    score = 0
+
+    if re.search(r'\b(surv(?:ey(?:ed)?)?|season)\b', context):
+        score += 12
+    if re.search(r'\b(revis(?:ed)?|publish(?:ed)?|edition|compiled|drawn|sketch(?:ed)?|prepared)\b', context):
+        score += 10
+    if re.search(r'\b(date|dated|year|a\.?d\.?)\b', context):
+        score += 8
+    if re.search(r'\b(map|plate|plan|copy|title|sheet)\b', context):
+        score += 4
+    if '-' in year_value:
+        score += 2
+
+    if line_cy <= img_height * 0.20 or line_cy >= img_height * 0.80:
+        score += 3
+
+    if re.search(r'\b(scale|miles?|yards?|feet|foot|kilomet(?:er|re)s?|metres?|contours?|elevation|latitude|longitude|north|south|east|west|grid|legend)\b', context):
+        score -= 8
+
+    return score
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+def detect_survey_year_from_ocr(
+    detections: List[Dict],
+    img_width: int,
+    img_height: int,
+) -> str:
+    """
+    Detect the printed year from OCR text.
+
+    Common SOI formats printed on the map:
+        "Surveyed 1934-35."        → "1934-35"
+        "Surveyed 1936."           → "1936"
+        "Revised 1972."            → "1972"
+        "Surveyed 1928-29, published 1935."  → "1928-29"
+
+    Non-SOI maps may print a year in a title, plate caption, date note,
+    or bottom margin. Those are also accepted when OCR can read them.
+
+    Returns a string like "1934-35", "1972", etc., or '' if not found.
+    """
+    lines = _group_ocr_lines(detections)
+    if not lines:
+        return ''
+
+    candidates = []
+    for line in lines:
+        text = line['text']
+        for match in YEAR_VALUE_RE.finditer(text):
+            year_value = _normalize_year_value(match.group(1))
+            if not year_value:
+                continue
+
+            start, end = match.span(1)
+            context = text[max(0, start - 30): min(len(text), end + 30)]
+            score = _score_year_candidate(context, year_value, line['cy'], img_height)
+            candidates.append({
+                'value': year_value,
+                'score': score,
+                'line_cy': line['cy'],
+            })
+
+    if candidates:
+        strong = [c for c in candidates if c['score'] >= 8]
+        pool = strong or [
+            c for c in candidates
+            if c['line_cy'] <= img_height * 0.20 or c['line_cy'] >= img_height * 0.80
+        ]
+        if pool:
+            pool.sort(
+                key=lambda c: (
+                    c['score'],
+                    1 if '-' in c['value'] else 0,
+                    1 if (c['line_cy'] <= img_height * 0.20 or c['line_cy'] >= img_height * 0.80) else 0,
+                ),
+                reverse=True,
+            )
+            return pool[0]['value']
+
+    return ''
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+def detect_map_number_from_ocr(
+    detections: List[Dict],
+    img_width: int,
+    img_height: int,
+) -> str:
+    """
+    Scan OCR detections for the official SOI sheet number printed in the
+    top-right corner of every Survey of India toposheet.
+
+    Format on the map:   No. 74  A
+                                ──     ← fraction line
+                                10
+    OCR may return this as:
+      - Single token:  "No. 74 A/10"  or  "No. 74 A"  or  "74 A/10"
+      - Two tokens:    "No. 74 A"  +  "10" just below
+      - Three tokens:  "No."  +  "74"  +  "A"  (with "10" potentially
+                       overlapping the "A" token vertically as a fraction)
+      - Four tokens:   "No."  +  "74"  +  "A"  +  "10" fully separate
+
+    Returns canonical string like "74 A/10", or '' if not detected.
+    """
+    # Search zone: top 30 % of height, right-most 45 % of width
+    zone_x = img_width  * 0.55   # right 45 % of image
+    zone_y = img_height * 0.30   # top 30 % of image
+
+    # Pre-filter detections to the zone and cache cx/cy
+    zone_dets = []
+    for d in detections:
+        bx1, by1, bx2, by2 = d['bbox']
+        cx = (bx1 + bx2) / 2
+        cy = (by1 + by2) / 2
+        if cx >= zone_x and cy <= zone_y:
+            zone_dets.append({
+                'text': d['text'].strip(),
+                'bbox': [bx1, by1, bx2, by2],
+                'cx': cx, 'cy': cy,
+            })
+
+    # ── Helper: find a 1-2 digit sub-number near/below a reference bbox ──
+    def _find_subnum_below(ref_bbox, candidates, exclude_text=''):
+        rbx1, rby1, rbx2, rby2 = ref_bbox
+        main_cx = (rbx1 + rbx2) / 2
+        h = max(rby2 - rby1, 1)
+        # Search from the lower half of the ref bbox downward
+        y_start = rby1 + h * 0.5
+        y_end   = rby2 + h * 5
+        for d2 in candidates:
+            txt = d2['text']
+            if (re.match(r'^\d{1,2}$', txt)
+                    and txt != exclude_text
+                    and abs(d2['cx'] - main_cx) < h * 3
+                    and y_start <= d2['cy'] <= y_end):
+                return txt
+        return None
+
+    # ── Pass 1: Single-token patterns ─────────────────────────────────────
+    # Pattern: "No. 74 A/10"  or  "No. 74 A"  (with optional sub-number)
+    no_pattern = re.compile(
+        r'No\.?\s*(\d{1,3})\s+([A-HJ-P])\s*(?:[/\\](\d{1,2}))?',
+        re.I,
+    )
+    # Pattern: bare "74 A/10"  or  "74 A"
+    bare_pattern = re.compile(
+        r'^(\d{1,3})\s+([A-HJ-P])\s*(?:[/\\](\d{1,2}))?$',
+        re.I,
+    )
+
+    for d in zone_dets:
+        text = d['text']
+        m = no_pattern.search(text) or bare_pattern.match(text)
+        if m:
+            block  = m.group(1)
+            letter = m.group(2).upper()
+            subnum = m.group(3) if (m.lastindex and m.lastindex >= 3) else None
+            if not subnum:
+                subnum = _find_subnum_below(d['bbox'], zone_dets, exclude_text=block)
+            if block and letter and subnum:
+                return f'{block} {letter}/{subnum}'
+            if block and letter:
+                return f'{block} {letter}'
+
+    # ── Pass 2: Multi-token matching ──────────────────────────────────────
+    # Step 1: Find "No." token in zone (optional anchor)
+    no_token = None
+    for d in zone_dets:
+        if re.match(r'^No\.?$', d['text'], re.I):
+            no_token = d
+            break
+
+    # Step 2: Collect candidate number tokens (1-3 digits)
+    num_candidates = []
+    for d in zone_dets:
+        if not re.match(r'^\d{1,3}$', d['text']):
+            continue
+        if no_token is not None:
+            # Anchor: number must be to the right of "No." at similar height
+            no_h = max(no_token['bbox'][3] - no_token['bbox'][1], 1)
+            if (d['cx'] > no_token['cx']
+                    and abs(d['cy'] - no_token['cy']) < no_h * 1.5
+                    and d['cx'] - no_token['cx'] < no_h * 15):
+                num_candidates.append(d)
+        else:
+            num_candidates.append(d)
+
+    # Step 3: For each candidate number, look for a letter to its right
+    for num_d in sorted(num_candidates, key=lambda x: x['cx']):
+        num_cx = num_d['cx']
+        num_cy = num_d['cy']
+        num_h  = max(num_d['bbox'][3] - num_d['bbox'][1], 1)
+        block  = num_d['text']
+
+        letter_token = None
+        for d in zone_dets:
+            if not re.match(r'^[A-HJ-P]$', d['text'], re.I):
+                continue
+            if (d['cx'] > num_cx
+                    and abs(d['cy'] - num_cy) < num_h * 1.5
+                    and d['cx'] - num_cx < num_h * 15):
+                if letter_token is None or d['cx'] < letter_token['cx']:
+                    letter_token = d
+
+        if letter_token is None:
+            continue
+
+        letter = letter_token['text'].upper()
+
+        # Step 4: Find sub-number below the letter (or below the number)
+        subnum = _find_subnum_below(letter_token['bbox'], zone_dets, exclude_text=block)
+        if not subnum:
+            subnum = _find_subnum_below(num_d['bbox'], zone_dets, exclude_text=block)
+
+        if block and letter and subnum:
+            return f'{block} {letter}/{subnum}'
+        if block and letter:
+            return f'{block} {letter}'
+
+    return ''
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 def _cluster(positions: List[float], gap: int = 30) -> List[float]:
@@ -473,6 +765,20 @@ def assign_all_grid_refs() -> dict:
         else:
             print('  Coordinates: not found in OCR text')
 
+        # ── Step 5: Detect official map number from top-right corner ──────────
+        ocr_map_number = detect_map_number_from_ocr(detections, img_width, img_height)
+        if ocr_map_number:
+            print(f'  Map number (OCR top-right corner): {ocr_map_number}')
+        else:
+            print('  Map number: not detected in top-right corner (will use filename)')
+
+        # ── Step 6: Detect survey year from top margin ───────────────────────
+        ocr_survey_year = detect_survey_year_from_ocr(detections, img_width, img_height)
+        if ocr_survey_year:
+            print(f'  Survey year (OCR top margin): {ocr_survey_year}')
+        else:
+            print('  Survey year: not detected in top margin')
+
         grid_results[map_name] = {
             'col_lines':        col_xs,
             'row_lines':        row_ys,
@@ -481,6 +787,8 @@ def assign_all_grid_refs() -> dict:
             'coord_bounds':     coord_bounds,
             'cell_coords':      cell_coords,
             'detections':       enriched,
+            'ocr_map_number':   ocr_map_number,   # e.g. "74 A/10" from printed corner
+            'ocr_survey_year':  ocr_survey_year,  # e.g. "1934-35" from top margin
         }
 
     with open(GRID_OUT_PATH, 'w', encoding='utf-8') as f:
