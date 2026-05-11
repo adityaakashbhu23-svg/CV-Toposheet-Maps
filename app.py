@@ -539,18 +539,19 @@ _LANDING_TEMPLATE = """<!DOCTYPE html>
 <title>CV-Toposheet - Map Digitization</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
-body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; background:#f0f4f8; display:flex; flex-direction:column; overflow:hidden; }
-.hdr { display:flex;align-items:center;justify-content:space-between;background:#0E7490;padding:14px 28px;flex-shrink:0; }
-.hdr-logo { font-size:1.25em; font-weight:700; color:#fff; letter-spacing:-.01em; }
+html { height:100%; }
+body { min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; background:#f0f4f8; display:flex; flex-direction:column; }
+.hdr { display:flex; align-items:center; justify-content:space-between; background:#0E7490; padding:clamp(10px,1.8vw,14px) clamp(14px,2.5vw,28px); flex-shrink:0; flex-wrap:wrap; gap:8px; }
+.hdr-logo { font-size:clamp(1em,2vw,1.25em); font-weight:700; color:#fff; letter-spacing:-.01em; }
 .hdr-logo span { color:#fff; }
 .hdr-sub  { font-size:0.78em; color:rgba(255,255,255,.75); margin-top:2px; }
-.hdr-actions { display:flex; align-items:center; gap:10px; }
+.hdr-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .settings-btn { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); color:#fff; border-radius:7px; padding:0 16px; height:36px; font-size:0.85em; font-weight:700; cursor:pointer; transition:background .2s; display:inline-flex; align-items:center; gap:5px; box-sizing:border-box; }
 .settings-btn:hover { background:rgba(255,255,255,.25); }
-#uploadForm { flex:1; display:flex; flex-direction:column; min-height:0; }
-.body { flex:1; display:flex; flex-direction:row; gap:16px; align-items:stretch; justify-content:stretch; padding:10px 8px; min-height:0; }
-.left { flex:1; min-width:280px; display:flex; flex-direction:column; }
-.right { width:440px; min-width:380px; max-width:520px; display:flex; flex-direction:column; padding:8px 12px; gap:0; background:#fff; border:2px solid #93c5d4; border-radius:14px; box-shadow:0 2px 16px rgba(14,116,144,.08); }
+#uploadForm { flex:1 0 auto; display:flex; flex-direction:column; }
+.body { flex:1 0 auto; display:flex; flex-direction:row; gap:clamp(8px,1.5vw,16px); align-items:stretch; padding:clamp(6px,1vw,10px) clamp(4px,0.8vw,8px); }
+.left { flex:1; min-width:0; display:flex; flex-direction:column; }
+.right { width:clamp(300px,32vw,460px); min-width:0; flex-shrink:0; display:flex; flex-direction:column; padding:clamp(6px,1vw,12px); gap:0; background:#fff; border:2px solid #93c5d4; border-radius:14px; box-shadow:0 2px 16px rgba(14,116,144,.08); }
 .right-title { font-size:0.55em; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#0E7490; margin-bottom:4px; padding-bottom:3px; border-bottom:1.5px solid #e0f2f7; flex-shrink:0; }
 .model-label { font-size:0.63em; font-weight:600; color:#6b8a99; text-transform:uppercase; letter-spacing:.08em; margin-bottom:4px; flex-shrink:0; }
 .model-cards { display:flex; flex-direction:column; gap:4px; margin-bottom:3px; flex:1; overflow-y:auto; min-height:0; padding-right:3px; scrollbar-width:thin; scrollbar-color:#93c5d4 #f0f4f8; }
@@ -579,15 +580,15 @@ body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; backg
 .process-btn:hover { background:linear-gradient(135deg,#0891b2,#06b6d4); box-shadow:0 5px 22px rgba(14,116,144,.55); transform:translateY(-1px); }
 .process-btn:disabled { background:#dde8ec; color:#7a9daa; cursor:not-allowed; box-shadow:none; transform:none; }
 .process-btn .btn-sub { display:block; font-size:0.68em; font-weight:400; color:rgba(255,255,255,.70); margin-top:2px; }
-.drop-zone { position:relative; border:2px dashed #93c5d4; border-radius:14px; background:#fff; flex:1; min-height:180px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px 16px 16px 16px; transition:border .18s,background .18s; cursor:pointer; overflow:visible; }
+.drop-zone { position:relative; border:2px dashed #93c5d4; border-radius:14px; background:#fff; flex:1; min-height:clamp(160px,25vh,300px); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:clamp(14px,2.5vw,24px) clamp(10px,2vw,16px) clamp(10px,2vw,16px); transition:border .18s,background .18s; cursor:pointer; overflow:visible; }
 .drop-zone.drag-over { border-color:#0e7490; background:#f6fdff; box-shadow:0 4px 32px rgba(14,116,144,.18); }
-.dz-icon-row { display:flex; align-items:center; justify-content:center; gap:28px; margin-bottom:10px; }
-.dz-icon-side { font-size:6em; line-height:1; }
-.dz-icon { font-size:6.5em; line-height:1; }
-.dz-icon-world { font-size:6.5em; line-height:1; filter:grayscale(1) brightness(0.6); -webkit-filter:grayscale(1) brightness(0.6); opacity:0.55; }
-.dz-title { font-size:1.05em; font-weight:700; color:#1e3a4a; margin-top:4px; text-align:center; }
-.dz-sub   { font-size:0.75em; color:#6b8a99; text-align:center; }
-.dz-badge { background:#e0f2f7; border:1px solid #93c5d4; border-radius:20px; padding:5px 16px; font-size:0.75em; color:#0e7490; letter-spacing:.06em; margin-top:6px; display:inline-block; white-space:nowrap; }
+.dz-icon-row { display:flex; align-items:center; justify-content:center; gap:clamp(12px,2.5vw,28px); margin-bottom:10px; }
+.dz-icon-side { font-size:clamp(3.5em,6vw,6em); line-height:1; }
+.dz-icon { font-size:clamp(4em,6.5vw,6.5em); line-height:1; }
+.dz-icon-world { font-size:clamp(4em,6.5vw,6.5em); line-height:1; filter:grayscale(1) brightness(0.6); -webkit-filter:grayscale(1) brightness(0.6); opacity:0.55; }
+.dz-title { font-size:clamp(0.9em,1.5vw,1.05em); font-weight:700; color:#1e3a4a; margin-top:4px; text-align:center; }
+.dz-sub   { font-size:clamp(0.68em,1.2vw,0.75em); color:#6b8a99; text-align:center; }
+.dz-badge { background:#e0f2f7; border:1px solid #93c5d4; border-radius:20px; padding:4px 12px; font-size:0.72em; color:#0e7490; letter-spacing:.06em; margin-top:6px; display:inline-block; white-space:nowrap; }
 #preview { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; max-width:580px; margin-top:10px; padding:4px 8px 4px 8px; position:relative; z-index:10; pointer-events:auto; }
 .prev-thumb { width:72px; height:72px; object-fit:cover; border-radius:6px; border:2px solid #93c5d4; box-shadow:0 2px 8px rgba(0,0,0,.15); display:block; }
 .prev-name { font-size:0.68em; color:#0e7490; text-align:center; max-width:72px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -595,7 +596,6 @@ body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; backg
 .prev-remove { position:absolute; top:3px; right:3px; width:22px; height:22px; border-radius:50%; background:rgba(220,38,38,0.92); color:#fff; border:2px solid #fff; font-size:13px; line-height:1; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 1px 5px rgba(0,0,0,.4); z-index:20; font-weight:900; opacity:0; transition:opacity .15s; pointer-events:auto; }
 .prev-item:hover .prev-remove { opacity:1; }
 .drop-zone input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; z-index:5; }
-@media (max-width:1100px) { .body { flex-direction:column; align-items:center; gap:18px; padding:18px 8px; } .left, .right { width:100%; max-width:700px; min-width:0; } }
 /* Settings Modal */
 .key-section { border:1px solid #e0e7ef; border-radius:8px; margin-bottom:12px; background:#f8fafc; }
 .key-section-title { font-weight:700; font-size:0.92em; padding:8px 12px; background:#e0f2f7; border-radius:8px 8px 0 0; cursor:pointer; user-select:none; display:flex; align-items:center; justify-content:space-between; }
@@ -654,10 +654,39 @@ body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; backg
 .modal-lock-btn { background:none; border:none; font-size:1.2em; cursor:pointer; padding:0 6px; line-height:1; opacity:.7; }
 .modal-lock-btn:hover { opacity:1; }
 .pin-confirm-label { font-size:0.82em; color:#555; margin:12px 0 6px; }
-.db-banner-btn { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); color:#fff; border-radius:7px; padding:0 16px; height:36px; font-size:0.85em; font-weight:700; cursor:pointer; transition:background .2s; text-decoration:none; display:inline-flex; align-items:center; gap:5px; box-sizing:border-box; }
+.db-banner-btn { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); color:#fff; border-radius:7px; padding:0 clamp(8px,1.5vw,16px); height:36px; font-size:0.85em; font-weight:700; cursor:pointer; transition:background .2s; text-decoration:none; display:inline-flex; align-items:center; gap:5px; box-sizing:border-box; white-space:nowrap; }
 .db-banner-btn:hover { background:rgba(255,255,255,.25); }
-.kill-banner-btn { background:#dc2626; border:1px solid #dc2626; color:#fff; border-radius:7px; padding:0 16px; height:36px; font-size:0.85em; font-weight:700; cursor:pointer; transition:background .2s; display:inline-flex; align-items:center; gap:5px; box-sizing:border-box; }
+.kill-banner-btn { background:#dc2626; border:1px solid #dc2626; color:#fff; border-radius:7px; padding:0 clamp(8px,1.5vw,16px); height:36px; font-size:0.85em; font-weight:700; cursor:pointer; transition:background .2s; display:inline-flex; align-items:center; gap:5px; box-sizing:border-box; white-space:nowrap; }
 .kill-banner-btn:hover { background:#b91c1c; }
+/* ── Responsive breakpoints ── */
+@media (max-width:1100px) {
+  .body { flex-direction:column; align-items:center; gap:14px; padding:14px 10px; }
+  .left, .right { width:100%; max-width:720px; }
+  .right { width:100%; max-width:720px; }
+  .drop-zone { min-height:220px; flex:none; }
+}
+@media (max-width:768px) {
+  .hdr { padding:10px 14px; }
+  .hdr-sub { display:none; }
+  .settings-btn, .db-banner-btn, .kill-banner-btn { height:32px; font-size:0.78em; }
+  .body { padding:8px; gap:10px; }
+  .drop-zone { min-height:180px; padding:12px 10px; }
+  .dz-icon-row { gap:10px; }
+  .right { border-radius:10px; }
+  .modal-card { min-width:0; width:95vw; }
+}
+@media (max-width:520px) {
+  .hdr-logo { font-size:0.95em; }
+  .db-banner-btn .db-label { display:none; }
+  .kill-banner-btn .kill-label { display:none; }
+  .settings-btn .settings-label { display:none; }
+  .body { padding:6px; gap:8px; }
+  .drop-zone { min-height:150px; padding:10px 8px; }
+  .dz-icon-row { margin-bottom:6px; }
+  .dz-badge { font-size:0.65em; padding:3px 8px; }
+  .right { padding:8px; }
+  .process-btn { font-size:0.85em; padding:10px; }
+}
 @media print { .modal-overlay, .hdr-actions { display:none !important; } }
 </style>
 </head>
@@ -669,9 +698,9 @@ body { height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; backg
     <div class="hdr-sub">Extracted Map Features</div>
   </div>
   <div class="hdr-actions">
-    <a href="/results" class="db-banner-btn" title="View all processed maps in the database" target="_blank">&#128202;&nbsp; Map Database</a>
-    <button class="kill-banner-btn" id="killBannerBtn" onclick="killRunningJob()" title="Kill any running job and restart the server">&#9632; Restart Server</button>
-    <button class="settings-btn" onclick="openSettings()">&#9881;&#xFE0E; Settings</button>
+    <a href="/results" class="db-banner-btn" title="View all processed maps in the database" target="_blank">&#128202;&nbsp;<span class="db-label">Map Database</span></a>
+    <button class="kill-banner-btn" id="killBannerBtn" onclick="killRunningJob()" title="Kill any running job and restart the server">&#9632;<span class="kill-label"> Restart Server</span></button>
+    <button class="settings-btn" onclick="openSettings()">&#9881;&#xFE0E;<span class="settings-label"> Settings</span></button>
   </div>
 </div>
 
