@@ -1,4 +1,4 @@
-('c:\\CV- Toposheet\\_build\\work\\build_exe\\CVToposheet.pkg',
+('C:\\CV- Toposheet\\_build\\work\\build_exe\\CVToposheet.pkg',
  {'BINARY': True,
   'DATA': True,
   'EXECUTABLE': True,
@@ -10,24 +10,24 @@
   'SYMLINK': False},
  [('pyi-contents-directory _internal', '', 'OPTION'),
   ('PYZ-00.pyz',
-   'c:\\CV- Toposheet\\_build\\work\\build_exe\\PYZ-00.pyz',
+   'C:\\CV- Toposheet\\_build\\work\\build_exe\\PYZ-00.pyz',
    'PYZ'),
   ('struct',
-   'c:\\CV- Toposheet\\_build\\work\\build_exe\\localpycs\\struct.pyc',
+   'C:\\CV- Toposheet\\_build\\work\\build_exe\\localpycs\\struct.pyc',
    'PYMODULE'),
   ('pyimod01_archive',
-   'c:\\CV- '
+   'C:\\CV- '
    'Toposheet\\_build\\work\\build_exe\\localpycs\\pyimod01_archive.pyc',
    'PYMODULE'),
   ('pyimod02_importers',
-   'c:\\CV- '
+   'C:\\CV- '
    'Toposheet\\_build\\work\\build_exe\\localpycs\\pyimod02_importers.pyc',
    'PYMODULE'),
   ('pyimod03_ctypes',
-   'c:\\CV- Toposheet\\_build\\work\\build_exe\\localpycs\\pyimod03_ctypes.pyc',
+   'C:\\CV- Toposheet\\_build\\work\\build_exe\\localpycs\\pyimod03_ctypes.pyc',
    'PYMODULE'),
   ('pyimod04_pywin32',
-   'c:\\CV- '
+   'C:\\CV- '
    'Toposheet\\_build\\work\\build_exe\\localpycs\\pyimod04_pywin32.pyc',
    'PYMODULE'),
   ('pyiboot01_bootstrap',

@@ -51,7 +51,7 @@ OutputDir=.
 OutputBaseFilename=CVToposheet_Setup
 ; App icon (used on installer wizard, desktop shortcut, Add/Remove Programs)
 SetupIconFile={#IconFile}
-WizardSmallImageFile={#IconFile}
+WizardSmallImageFile=app_icon.png
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
