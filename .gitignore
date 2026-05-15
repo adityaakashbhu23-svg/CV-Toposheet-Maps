@@ -13,6 +13,11 @@ dist/
 build/
 .eggs/
 
+# Build outputs - large binary files not for git
+_build/CVToposheet_Setup.exe
+_build/dist/
+_build/work/
+
 # Output files (can be regenerated)
 results/
 logs/
