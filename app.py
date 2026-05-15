@@ -1599,8 +1599,8 @@ if __name__ == '__main__':
                 parts = line.split()
                 pid = parts[-1] if parts else None
                 if pid and pid.isdigit() and int(pid) != os.getpid():
-                    subprocess.call(f'taskkill /F /PID {pid}',
-                                    shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.call(['taskkill', '/F', '/PID', pid],
+                                    shell=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
             pass
     log = logging.getLogger('werkzeug')
