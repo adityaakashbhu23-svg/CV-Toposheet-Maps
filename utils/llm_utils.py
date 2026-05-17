@@ -1,8 +1,10 @@
 # utils/llm_utils.py  –  LLM wrappers for OpenAI, Google Gemini, and Anthropic Claude
 
 import json
+import re
 import sys
 import time
+from collections import defaultdict
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -31,56 +33,204 @@ def _load_country_block(country: str) -> str:
     return ''
 
 
-# Keywords printed on real maps that identify their country of origin.
-# Each tuple is (keyword_lowercase, country).  First match wins.
-_COUNTRY_KEYWORDS = [
-    # India — Survey of India is the dominant agency
-    ('survey of india',         'india'),
-    ('published by the survey of india', 'india'),
-    ('printed at the survey of india', 'india'),
-    ('dehra dun',               'india'),
-    ('dehradun',                'india'),
-    ('s.o.i.',                  'india'),
-    # Pakistan — Survey of Pakistan / pre-partition SOI heritage sheets
-    ('survey of pakistan',      'pakistan'),
-    ('s.o.p.',                  'pakistan'),
-    # UK — Ordnance Survey
-    ('ordnance survey',         'uk'),
-    ('published by ordnance',   'uk'),
-    ('crown copyright',         'uk'),
-    ('o.s. sheet',              'uk'),
-    # USA — USGS
-    ('u.s. geological survey',  'usa'),
-    ('united states geological', 'usa'),
-    ('usgs',                    'usa'),
-    ('department of the interior', 'usa'),
-    # Germany
-    ('topographische karte',    'germany'),
-    ('landesvermessung',        'germany'),
-    ('messtischblatt',          'germany'),
-    ('bayerisches landesamt',   'germany'),
-    # France
-    ('institut géographique',   'france'),
-    ('institut geographique',   'france'),
-    ('carte de france',         'france'),
-    ('ign',                     'france'),
-    ('service géographique',    'france'),
-    ('service geographique',    'france'),
+# ─────────────────────────────────────────────────────────────
+#  Country detection — scoring-based (NOT first-match)
+# ─────────────────────────────────────────────────────────────
+#
+# Each entry: (pattern, country, score, whole_word)
+#   score       — points awarded per hit (cumulative across all matches)
+#   whole_word  — if True, only match as an isolated word (not substring)
+#
+# Score guide:
+#   20  = definitive agency name printed on the map
+#   12  = strong secondary agency marker
+#    8  = SOI/national sheet identifier or well-known capital/major city
+#    5  = Indian state name or major river
+#    3  = district / town strongly associated with one country
+#    1  = weak corroborating signal
+#
+_COUNTRY_RULES: list[tuple[str, str, int, bool]] = [
+    # ── India — Survey of India agency text (highest confidence) ────────────
+    ('survey of india',                  'india',    20, False),
+    ('published by the survey of india', 'india',    20, False),
+    ('printed at the survey of india',   'india',    20, False),
+    ('surveyor general of india',        'india',    20, False),
+    ('dehra dun',                        'india',    12, False),
+    ('dehradun',                         'india',    12, False),
+    ('s\\.o\\.i\\.',                     'india',    12, False),  # regex literal dots
+    # SOI sheet-number patterns: "72 C/01", "45D/7", "53 A/4" etc.
+    # Compiled separately below as regex
+    # ── India — states (printed on map borders / title blocks) ───────────────
+    ('uttar pradesh',   'india',  8, False),
+    ('madhya pradesh',  'india',  8, False),
+    ('andhra pradesh',  'india',  8, False),
+    ('himachal pradesh','india',  8, False),
+    ('arunachal pradesh','india', 8, False),
+    ('west bengal',     'india',  8, False),
+    ('tamil nadu',      'india',  8, False),
+    ('rajasthan',       'india',  5, True),
+    ('maharashtra',     'india',  5, True),
+    ('karnataka',       'india',  5, True),
+    ('telangana',       'india',  5, True),
+    ('jharkhand',       'india',  5, True),
+    ('chhattisgarh',    'india',  5, True),
+    ('uttarakhand',     'india',  5, True),
+    ('uttaranchal',     'india',  5, True),
+    ('manipur',         'india',  5, True),
+    ('meghalaya',       'india',  5, True),
+    ('mizoram',         'india',  5, True),
+    ('nagaland',        'india',  5, True),
+    ('tripura',         'india',  5, True),
+    ('assam',           'india',  5, True),
+    ('odisha',          'india',  5, True),
+    ('orissa',          'india',  5, True),
+    ('haryana',         'india',  5, True),
+    ('gujarat',         'india',  5, True),
+    ('kerala',          'india',  5, True),
+    ('sikkim',          'india',  5, True),
+    # ── India — major cities / districts commonly on SOI maps ────────────────
+    ('ballia',          'india',  8, True),
+    ('allahabad',       'india',  5, True),
+    ('prayagraj',       'india',  5, True),
+    ('varanasi',        'india',  5, True),
+    ('benares',         'india',  5, True),
+    ('lucknow',         'india',  5, True),
+    ('kanpur',          'india',  5, True),
+    ('cawnpore',        'india',  5, True),
+    ('agra',            'india',  3, True),
+    ('mathura',         'india',  5, True),
+    ('meerut',          'india',  5, True),
+    ('bareilly',        'india',  5, True),
+    ('gorakhpur',       'india',  5, True),
+    ('jhansi',          'india',  5, True),
+    ('gwalior',         'india',  5, True),
+    ('patna',           'india',  5, True),
+    ('muzaffarpur',     'india',  5, True),
+    ('darbhanga',       'india',  5, True),
+    ('bhagalpur',       'india',  5, True),
+    ('kolkata',         'india',  5, True),
+    ('calcutta',        'india',  5, True),
+    ('howrah',          'india',  5, True),
+    ('darjeeling',      'india',  5, True),
+    ('mumbai',          'india',  5, True),
+    ('bombay',          'india',  5, True),
+    ('pune',            'india',  5, True),
+    ('poona',           'india',  5, True),
+    ('nagpur',          'india',  5, True),
+    ('aurangabad',      'india',  5, True),
+    ('ahmedabad',       'india',  5, True),
+    ('surat',           'india',  3, True),
+    ('baroda',          'india',  5, True),
+    ('vadodara',        'india',  5, True),
+    ('jaipur',          'india',  5, True),
+    ('jodhpur',         'india',  5, True),
+    ('udaipur',         'india',  5, True),
+    ('bikaner',         'india',  5, True),
+    ('hyderabad',       'india',  3, True),   # also Pakistan, so lower weight
+    ('secunderabad',    'india',  5, True),
+    ('bangalore',       'india',  5, True),
+    ('mysore',          'india',  5, True),
+    ('madras',          'india',  5, True),
+    ('chennai',         'india',  5, True),
+    ('coimbatore',      'india',  5, True),
+    ('madurai',         'india',  5, True),
+    ('simla',           'india',  5, True),
+    ('shimla',          'india',  5, True),
+    ('mussoorie',       'india',  5, True),
+    ('nainital',        'india',  5, True),
+    ('naini tal',       'india',  5, False),
+    ('almora',          'india',  5, True),
+    ('bhopal',          'india',  5, True),
+    ('indore',          'india',  5, True),
+    ('jabalpur',        'india',  5, True),
+    ('raipur',          'india',  5, True),
+    ('amritsar',        'india',  5, True),
+    ('ludhiana',        'india',  5, True),
+    # ── India — major rivers / geographic features ───────────────────────────
+    ('ganga',           'india',  5, True),
+    ('yamuna',          'india',  5, True),
+    ('jumna',           'india',  5, True),
+    ('brahmaputra',     'india',  5, True),
+    ('godavari',        'india',  5, True),
+    ('narmada',         'india',  5, True),
+    ('chambal',         'india',  5, True),
+    ('ghats',           'india',  3, True),
+    ('deccan',          'india',  5, True),
+    ('vindhya',         'india',  5, True),
+    ('himalaya',        'india',  5, True),
+    ('himalayas',       'india',  5, True),
+    # "district" alone is a moderate India signal (heavily used on SOI maps)
+    ('district',        'india',  2, True),
+    # ── Pakistan — Survey of Pakistan ────────────────────────────────────────
+    ('survey of pakistan',  'pakistan', 20, False),
+    ('s\\.o\\.p\\.',        'pakistan', 12, False),
+    ('islamabad',           'pakistan',  8, True),
+    ('rawalpindi',          'pakistan',  8, True),
+    ('peshawar',            'pakistan',  8, True),
+    ('peshawur',            'pakistan',  8, True),
+    ('lahore',              'pakistan',  8, True),
+    ('karachi',             'pakistan',  8, True),
+    ('quetta',              'pakistan',  8, True),
+    ('multan',              'pakistan',  8, True),
+    ('faisalabad',          'pakistan',  8, True),
+    ('lyallpur',            'pakistan',  8, True),
+    # ── UK — Ordnance Survey ─────────────────────────────────────────────────
+    ('ordnance survey',         'uk', 20, False),
+    ('published by ordnance',   'uk', 20, False),
+    ('crown copyright',         'uk', 12, False),
+    ('o\\.s\\. sheet',          'uk', 12, False),
+    ('great britain',           'uk',  8, False),
+    ('northern ireland',        'uk',  8, False),
+    ('scotland',                'uk',  5, True),
+    ('england',                 'uk',  5, True),
+    ('wales',                   'uk',  3, True),
+    # ── USA — USGS ───────────────────────────────────────────────────────────
+    ('u\\.s\\. geological survey',   'usa', 20, False),
+    ('united states geological',     'usa', 20, False),
+    ('usgs',                         'usa', 12, True),
+    ('department of the interior',   'usa', 12, False),
+    ('quadrangle',                   'usa',  8, True),
+    ('united states',                'usa',  8, False),
+    # ── Germany ──────────────────────────────────────────────────────────────
+    ('topographische karte',    'germany', 20, False),
+    ('landesvermessung',        'germany', 20, False),
+    ('messtischblatt',          'germany', 20, False),
+    ('bayerisches landesamt',   'germany', 12, False),
+    ('bundesrepublik',          'germany',  8, False),
+    # ── France — NOTE: 'ign' removed as bare substring; now whole-word only ──
+    ('institut géographique',   'france', 20, False),
+    ('institut geographique',   'france', 20, False),
+    ('carte de france',         'france', 20, False),
+    ('service géographique',    'france', 20, False),
+    ('service geographique',    'france', 20, False),
+    ('ign',                     'france', 12, True),   # whole-word only (avoids "alignment", "design" etc.)
+    ('république française',    'france',  8, False),
+    ('republique francaise',    'france',  8, False),
 ]
 
+# SOI sheet number regex — patterns like "72 C/01", "45D/7", "NI-44-6", "53 A/4"
+# These are printed in map corners/title blocks and are 100% India identifiers.
+_SOI_SHEET_RE = re.compile(
+    r'\b(?:'
+    r'\d{1,3}\s*[A-Z](?:/\d{1,2})?'   # "72 C/01", "45D/7", "53 A"
+    r'|[A-Z]{1,2}-\d{2}-\d{1,2}'      # "NI-44-6", "NH-45-12"
+    r')\b'
+)
 
-def detect_country(ocr_texts: list, fallback: str = 'india') -> str:
-    """
-    Scan a flat list of OCR strings extracted from a map and return the
-    most likely country code ('india', 'uk', 'usa', 'germany', 'france',
-    'pakistan').  Falls back to *fallback* (default 'india') if nothing
-    matches.
 
-    *ocr_texts* can be a list of strings, a list of dicts with a 'text'
-    key, or a nested list — the function flattens automatically.
+def detect_country(ocr_texts: list, fallback: str = 'india',
+                   map_name: str = '') -> str:
     """
-    # Flatten whatever structure is passed in
+    Score-based country detection from OCR text + optional map filename.
+
+    Returns the country code with the highest accumulated score, or *fallback*
+    when no country reaches a minimum threshold of 3 points.
+
+    Supports: 'india', 'pakistan', 'uk', 'usa', 'germany', 'france'.
+    """
+    # ── 1. Flatten all OCR input into one lowercased string ─────────────────
     flat: list[str] = []
+
     def _collect(obj):
         if isinstance(obj, str):
             flat.append(obj)
@@ -90,15 +240,221 @@ def detect_country(ocr_texts: list, fallback: str = 'india') -> str:
         elif isinstance(obj, (list, tuple)):
             for item in obj:
                 _collect(item)
-    _collect(ocr_texts)
 
+    _collect(ocr_texts)
     combined = ' '.join(flat).lower()
 
-    for keyword, country in _COUNTRY_KEYWORDS:
-        if keyword in combined:
-            return country
+    # Also include the map filename (stem) as a searchable string
+    search_text = combined
+    if map_name:
+        search_text = map_name.lower() + ' ' + combined
 
-    return fallback
+    # ── 2. SOI sheet-number check (instant India signal) ────────────────────
+    scores: dict[str, float] = defaultdict(float)
+    if _SOI_SHEET_RE.search(search_text):
+        scores['india'] += 10
+        print(f'[CountryDetect] SOI sheet number found → +10 india')
+
+    # ── 3. Score every rule ──────────────────────────────────────────────────
+    for pattern, country, score, whole_word in _COUNTRY_RULES:
+        if whole_word:
+            hit = bool(re.search(r'\b' + re.escape(pattern) + r'\b', search_text))
+        else:
+            # pattern may itself be a regex (e.g. 's\.o\.i\.')
+            try:
+                hit = bool(re.search(pattern, search_text))
+            except re.error:
+                hit = pattern in search_text
+        if hit:
+            scores[country] += score
+
+    # ── 4. Pick winner ───────────────────────────────────────────────────────
+    if not scores:
+        return fallback
+
+    best_country = max(scores, key=lambda c: scores[c])
+    best_score   = scores[best_country]
+
+    # Require at least 3 points to trust any detection
+    if best_score < 3:
+        return fallback
+
+    # Log scores for transparency
+    score_str = '  '.join(f'{c}:{s:.0f}' for c, s in
+                           sorted(scores.items(), key=lambda x: -x[1]))
+    print(f'[CountryDetect] Scores → {score_str}  |  winner: {best_country.upper()} ({best_score:.0f} pts)')
+    return best_country
+
+
+# ─────────────────────────────────────────────────────────────
+#  Vision-based country detection (Gemini sees the map image)
+# ─────────────────────────────────────────────────────────────
+
+_VISION_COUNTRY_PROMPT = """You are an expert in historical topographical maps from around the world.
+
+Look carefully at this map image — specifically the title block, border text, agency/publisher name, sheet number, and any place names visible.
+
+Your task: identify which country this map belongs to.
+
+Supported countries (reply with ONLY the code word):
+  india     — Survey of India (SOI) maps, sheet numbers like "72 C/01", Indian place names
+  pakistan  — Survey of Pakistan maps, or pre-1947 SOI sheets covering Pakistan territory
+  uk        — Ordnance Survey maps of Great Britain / Northern Ireland
+  usa       — USGS topographic quadrangle maps of the United States
+  germany   — German Topographische Karte / Messtischblatt maps
+  france    — French IGN / Institut Géographique National maps
+
+Reply with EXACTLY this JSON and nothing else:
+{"country": "<code>", "confidence": <0.0-1.0>, "evidence": "<brief reason>"}
+
+confidence guide:
+  1.0 = agency name / sheet number clearly visible
+  0.8 = strong place names + context
+  0.5 = probable but ambiguous
+  0.3 = weak guess
+"""
+
+_VISION_KNOWN_COUNTRIES = {'india', 'pakistan', 'uk', 'usa', 'germany', 'france'}
+
+
+def detect_country_from_image(
+    map_path: 'Path',
+    api_key: str,
+    fallback: str = 'india',
+    model: str = 'gemini-2.0-flash',
+) -> tuple:
+    """
+    Use Gemini Vision to detect the map's country by looking at the image.
+
+    Crops the top 20% and bottom 20% of the map (title blocks are there),
+    stitches them into one image, and asks Gemini what country it is.
+
+    Returns (country_code: str, confidence: float).
+    Falls back to (fallback, 0.0) on any error.
+    """
+    if not api_key:
+        return fallback, 0.0
+
+    try:
+        from PIL import Image
+        import io
+        from google import genai
+        from google.genai import types as genai_types
+    except ImportError as e:
+        print(f'[CountryDetect/Vision] Missing dependency: {e}')
+        return fallback, 0.0
+
+    try:
+        img = Image.open(str(map_path)).convert('RGB')
+        w, h = img.size
+
+        # Crop top 20% and bottom 20% — title/agency text lives there on SOI maps
+        top_strip    = img.crop((0, 0,             w, int(h * 0.20)))
+        bottom_strip = img.crop((0, int(h * 0.80), w, h))
+
+        # Stitch vertically so Gemini sees both in one call
+        combined_h = top_strip.height + bottom_strip.height
+        combined   = Image.new('RGB', (w, combined_h))
+        combined.paste(top_strip,    (0, 0))
+        combined.paste(bottom_strip, (0, top_strip.height))
+
+        # Resize to max 1024px wide to keep payload small
+        if combined.width > 1024:
+            ratio    = 1024 / combined.width
+            combined = combined.resize(
+                (1024, int(combined.height * ratio)), Image.LANCZOS
+            )
+
+        buf = io.BytesIO()
+        combined.save(buf, format='JPEG', quality=85)
+        image_bytes = buf.getvalue()
+
+    except Exception as e:
+        print(f'[CountryDetect/Vision] Image crop failed: {e}')
+        return fallback, 0.0
+
+    try:
+        client   = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=model,
+            contents=[
+                genai_types.Part.from_bytes(data=image_bytes, mime_type='image/jpeg'),
+                _VISION_COUNTRY_PROMPT,
+            ],
+            config=genai_types.GenerateContentConfig(
+                temperature=0.0,
+                max_output_tokens=256,
+            ),
+        )
+        raw = response.text.strip() if response.text else ''
+        # Strip markdown fences if present
+        raw = re.sub(r'^```[a-z]*\n?', '', raw).rstrip('`').strip()
+
+        parsed     = json.loads(raw)
+        country    = str(parsed.get('country', '')).lower().strip()
+        confidence = float(parsed.get('confidence', 0.0))
+        evidence   = parsed.get('evidence', '')
+
+        if country not in _VISION_KNOWN_COUNTRIES:
+            print(f'[CountryDetect/Vision] Unknown country returned: "{country}" — ignoring')
+            return fallback, 0.0
+
+        print(f'[CountryDetect/Vision] {country.upper()}  confidence={confidence:.2f}  evidence="{evidence}"')
+        return country, confidence
+
+    except Exception as e:
+        print(f'[CountryDetect/Vision] Gemini call failed: {e}')
+        return fallback, 0.0
+
+
+def detect_country_smart(
+    ocr_texts: list,
+    map_name:  str  = '',
+    map_path:  'Path | None' = None,
+    fallback:  str  = 'india',
+) -> str:
+    """
+    Two-stage country detection:
+      Stage 1 — Gemini Vision looks at the actual map image (if map_path given + key available)
+      Stage 2 — Score-based keyword/place-name scan of OCR text
+
+    Vision result wins when confidence ≥ 0.7.
+    Otherwise OCR scoring decides (or both signals are combined).
+    """
+    try:
+        import config as _cfg
+        gemini_key = getattr(_cfg, 'GEMINI_API_KEY', '')
+        gemini_model = getattr(_cfg, 'GEMINI_MODEL', 'gemini-2.0-flash')
+    except Exception:
+        gemini_key   = ''
+        gemini_model = 'gemini-2.0-flash'
+
+    vision_country    = None
+    vision_confidence = 0.0
+
+    # ── Stage 1: Vision ──────────────────────────────────────────────────────
+    if map_path and gemini_key:
+        print(f'[CountryDetect] Stage 1: Vision scan of map image...')
+        vision_country, vision_confidence = detect_country_from_image(
+            map_path, gemini_key, fallback=fallback, model=gemini_model
+        )
+        if vision_confidence >= 0.7:
+            print(f'[CountryDetect] Vision confident → {vision_country.upper()} ({vision_confidence:.2f})')
+            return vision_country
+
+    # ── Stage 2: OCR text scoring ────────────────────────────────────────────
+    print(f'[CountryDetect] Stage 2: OCR text scoring...')
+    ocr_country = detect_country(ocr_texts, fallback=fallback, map_name=map_name)
+
+    # If vision gave a low-confidence hint that matches OCR → boost trust
+    if vision_country and vision_country == ocr_country:
+        print(f'[CountryDetect] Vision + OCR agree → {ocr_country.upper()} ✓')
+    elif vision_country and vision_confidence >= 0.4:
+        # Vision and OCR disagree — trust OCR but log the conflict
+        print(f'[CountryDetect] Vision ({vision_country}, {vision_confidence:.2f}) vs '
+              f'OCR ({ocr_country}) — using OCR result')
+
+    return ocr_country
 
 
 def build_system_prompt(country: str = 'india') -> str:

@@ -327,17 +327,26 @@ def phase4_llm(new_maps: list, grid_results: dict) -> dict:
     print(f'#  Phase 4 (incremental): LLM cleaning on {len(new_maps)} new map(s)')
     print(f'{"#"*60}')
 
-    # Auto-detect map country from OCR text and update system prompt
+    # Auto-detect map country: Stage 1 = Gemini Vision on image, Stage 2 = OCR scoring
     import utils.llm_utils as llm_utils
-    if OCR_RAW_PATH.exists():
-        try:
+    try:
+        _ocr_data = {}
+        if OCR_RAW_PATH.exists():
             with open(OCR_RAW_PATH, encoding='utf-8') as _f:
                 _ocr_data = json.load(_f)
-            _country = llm_utils.detect_country(_ocr_data, fallback=config.MAP_COUNTRY)
-            llm_utils.SYSTEM_PROMPT = llm_utils.build_system_prompt(_country)
-            print(f'[LLM] Country auto-detected: {_country.upper()}')
-        except Exception:
-            pass
+        _map_name_hint = ' '.join(p.stem for p in new_maps)
+        # Use the first new map image for vision scan
+        _map_path_hint = new_maps[0] if new_maps else None
+        _country = llm_utils.detect_country_smart(
+            _ocr_data,
+            map_name=_map_name_hint,
+            map_path=_map_path_hint,
+            fallback=config.MAP_COUNTRY,
+        )
+        llm_utils.SYSTEM_PROMPT = llm_utils.build_system_prompt(_country)
+        print(f'[LLM] Country auto-detected: {_country.upper()}')
+    except Exception as _e:
+        print(f'[LLM] Country detection error: {_e}')
 
     llm_results = {}
     if LLM_OUT_PATH.exists():

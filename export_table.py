@@ -195,9 +195,11 @@ body {{ font-family:'Segoe UI',Arial,sans-serif; background:#f0f2f5; color:#222;
 .hdr {{ background:#0E7490; color:white; padding:12px 22px; flex-shrink:0; display:flex; align-items:center; gap:16px; }}
 .hdr-title {{ font-size:1.15em; font-weight:700; }}
 .hdr-sub   {{ font-size:0.78em; color:rgba(255,255,255,0.72); margin-top:2px; }}
-.hdr-stats {{ margin-left:auto; display:flex; gap:18px; }}
+.hdr-stats {{ margin-left:auto; display:flex; align-items:center; gap:18px; }}
 .hdr-stat .n {{ font-size:1.2em; font-weight:bold; color:#ffffff; text-align:center; }}
 .hdr-stat .l {{ font-size:0.7em; color:rgba(255,255,255,0.65); text-align:center; }}
+.hdr-home {{ display:inline-flex; align-items:center; justify-content:center; gap:4px; padding:4px 11px; background:rgba(255,255,255,0.15); color:white; text-decoration:none; border-radius:5px; font-size:0.76em; font-weight:600; border:1px solid rgba(255,255,255,0.3); transition:background .15s; }}
+.hdr-home:hover {{ background:rgba(255,255,255,0.28); }}
 
 /* ── Layout ── */
 .layout {{ display:flex; flex:1; overflow:hidden; }}
@@ -290,6 +292,7 @@ tr:hover td {{ background:#f5f8ff; }}
     <div class="hdr-sub">Extracted Map Feature</div>
   </div>
   <div class="hdr-stats">
+    <a href="/" class="hdr-home">&#8592;&nbsp;Home</a>
     <div class="hdr-stat"><div class="n">{len(rows):,}</div><div class="l">Features</div></div>
     <div class="hdr-stat"><div class="n">{total_maps}</div><div class="l">Maps</div></div>
   </div>

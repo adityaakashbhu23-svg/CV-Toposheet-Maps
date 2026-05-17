@@ -24,13 +24,45 @@ from utils.llm_utils import (
 
 # ── Country-aware system prompt — AUTO-DETECTED from OCR text ────────────────
 def _detect_country_from_ocr() -> str:
-    """Read ocr_results_raw.json and auto-detect the map's country of origin."""
-    ocr_path = config.LOGS_FOLDER / 'ocr_results_raw.json'
+    """
+    Two-stage country detection:
+      Stage 1 — Gemini Vision looks at the actual map image
+      Stage 2 — Score-based keyword scan of OCR text
+    """
+    ocr_path  = config.LOGS_FOLDER / 'ocr_results_raw.json'
+    grid_path = config.LOGS_FOLDER / 'grid_detection.json'
+
+    # Collect map name hints + find the actual map image path
+    map_name_hint = ''
+    map_path_hint = None
+    if grid_path.exists():
+        try:
+            with open(grid_path, encoding='utf-8') as _gf:
+                _gd = json.load(_gf)
+            map_name_hint = ' '.join(_gd.keys())
+            # Try to find the image file in maps/ folder
+            for _stem in _gd.keys():
+                for _ext in ('.jpg', '.jpeg', '.png', '.tif', '.tiff',
+                             '.JPG', '.JPEG', '.PNG', '.TIF', '.TIFF'):
+                    _candidate = config.MAPS_FOLDER / (_stem + _ext)
+                    if _candidate.exists():
+                        map_path_hint = _candidate
+                        break
+                if map_path_hint:
+                    break
+        except Exception:
+            pass
+
     if ocr_path.exists():
         try:
             with open(ocr_path, encoding='utf-8') as _f:
                 data = json.load(_f)
-            country = llm_utils.detect_country(data, fallback=config.MAP_COUNTRY)
+            country = llm_utils.detect_country_smart(
+                data,
+                map_name=map_name_hint,
+                map_path=map_path_hint,
+                fallback=config.MAP_COUNTRY,
+            )
             return country
         except Exception:
             pass
