@@ -95,11 +95,11 @@ Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName} now (browser wi
 Root: HKLM; Subkey: "Software\{#AppPublisher}\{#AppName}"; \
     ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; \
     Flags: uninsdeletekey
-; Optional auto-startup
+; Optional auto-startup (only written in non-admin/per-user install mode)
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
     ValueType: string; ValueName: "{#AppName}"; \
     ValueData: """{app}\{#AppExeName}"""; \
-    Flags: uninsdeletevalue; Tasks: startupentry
+    Flags: uninsdeletevalue; Tasks: startupentry; Check: not IsAdminInstallMode
 
 [UninstallDelete]
 ; Uncomment below to also remove user data on uninstall:
