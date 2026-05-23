@@ -1,42 +1,42 @@
-CV-Toposheet — First-Time Setup Guide
+﻿CV-Toposheet - First-Time Setup Guide
 ======================================
 
 Complete the three steps below after launching the app.
-Open the app first: double-click the desktop shortcut →
-your browser opens at  http://127.0.0.1:5000
+Launch the app from the desktop shortcut - the app window
+opens automatically (no browser needed).
 
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 1 — ENTER YOUR API KEY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+======================================================
+STEP 1: ENTER YOUR API KEY
+======================================================
 
 The app needs at least ONE LLM API key to process maps.
-Groq and Gemini are FREE — recommended for first use.
+Groq and Gemini are FREE - recommended for first use.
 
-  Click [⚙ Settings] on the home page, then fill in
+  Click [Settings] on the home page, then fill in
   one or more of the following:
 
-  ► Groq API Key (FREE)
+  - Groq API Key (FREE)
       Get it at: https://console.groq.com
-      Sign up → API Keys → Create new key → paste it in.
+      Sign up > API Keys > Create new key > paste it in.
 
-  ► Gemini API Key (FREE)
+  - Gemini API Key (FREE)
       Get it at: https://aistudio.google.com/apikey
-      Sign in with Google → Create API key → paste it in.
+      Sign in with Google > Create API key > paste it in.
 
-  ► OpenAI API Key
+  - OpenAI API Key
       Get it at: https://platform.openai.com/api-keys
       (Requires a paid OpenAI account)
 
   Click [Save Settings] when done.
 
   NOTE: Without at least one API key the pipeline cannot
-  run. You do NOT need all keys — one is enough.
+  run. You do NOT need all keys - one is enough.
 
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 2 — UPLOAD YOUR GOOGLE CLOUD VISION JSON FILE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+======================================================
+STEP 2: UPLOAD YOUR GOOGLE CLOUD VISION JSON FILE
+======================================================
 
 The OCR engine uses Google Cloud Vision (GCV).
 You need a GCP Service Account JSON credentials file.
@@ -45,12 +45,12 @@ You need a GCP Service Account JSON credentials file.
   1. Go to https://console.cloud.google.com
   2. Create (or open) a project.
   3. Enable the "Cloud Vision API" for that project.
-  4. Go to IAM & Admin → Service Accounts.
-  5. Create a service account → click it → Keys tab.
-  6. Add Key → Create new key → JSON → Download the file.
+  4. Go to IAM & Admin > Service Accounts.
+  5. Create a service account > click it > Keys tab.
+  6. Add Key > Create new key > JSON > Download the file.
 
   HOW TO ADD IT IN THE APP:
-  1. Open the app → click [⚙ Settings].
+  1. Open the app > click [Settings].
   2. Under "Google Cloud Vision", click
      [Upload service_account.json].
   3. Select the JSON file you downloaded above.
@@ -63,44 +63,44 @@ You need a GCP Service Account JSON credentials file.
   EasyOCR (offline, slower, less accurate).
 
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 3 — PROTECT YOUR SETTINGS WITH A PIN  [recommended]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+======================================================
+STEP 3: PROTECT YOUR SETTINGS WITH A PIN  [recommended]
+======================================================
 
 Set a 4-digit PIN so no one else can view or change
 your API keys.
 
   TO SET A PIN:
-  1. Open the app → click [⚙ Settings].
-  2. Click the lock icon 🔓 (top-right of the dialog).
-  3. Enter a 4-digit PIN → confirm it.
-  → Icon changes to 🔒. Settings is now PIN-protected.
+  1. Open the app > click [Settings].
+  2. Click the lock icon at the top-right of the dialog.
+  3. Enter a 4-digit PIN > confirm it.
+  Settings is now PIN-protected.
 
   TO OPEN SETTINGS AFTER LOCKING:
-  Click [⚙ Settings] → enter your PIN → it opens.
+  Click [Settings] > enter your PIN > it opens.
 
   TO CHANGE OR REMOVE YOUR PIN:
-  Open Settings (enter PIN) → click 🔒 →
-  verify current PIN → enter a new PIN twice,
+  Open Settings (enter PIN) > click the lock icon >
+  verify current PIN > enter a new PIN twice,
   or click "Remove PIN" to disable the lock.
 
   FORGOT YOUR PIN?
-  Press F12 in the browser → Application tab →
-  Local Storage → http://127.0.0.1:5000 →
+  Press F12 in the app window > Application tab >
+  Local Storage > http://127.0.0.1:5000 >
   delete the entry named  "cvt_settings_pin".
 
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+======================================================
 QUICK-START CHECKLIST
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+======================================================
 
   [1] Launch the app (desktop shortcut)
-  [2] Settings → enter Groq or Gemini API key → Save
-  [3] Settings → upload service_account.json → Save
-  [4] Settings → set a PIN lock (optional but recommended)
-  [5] Upload a map image → choose a pipeline mode → Run!
+  [2] Settings > enter Groq or Gemini API key > Save
+  [3] Settings > upload service_account.json > Save
+  [4] Settings > set a PIN lock (optional but recommended)
+  [5] Upload a map image > choose a pipeline mode > Run!
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+======================================================
 Developer: Aditya Akash
-Project:   Historical Survey of India — Map Digitization
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Project:   Historical Survey of India - Map Digitization
+======================================================

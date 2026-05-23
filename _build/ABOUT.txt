@@ -47,7 +47,7 @@ WHO IS IT FOR?
 
 IMPORTANT NOTES
 ---------------
-  * Results may contain OCR or LLM errors — always verify
+  * Results may contain OCR or LLM errors - always verify
     extracted features against the original source maps
   * Accuracy improves with higher-tier API keys (Gemini / GCV)
   * Keep your API keys secure and do not share them
@@ -65,7 +65,7 @@ SYSTEM REQUIREMENTS
 AFTER INSTALLATION
 ------------------
   1. Launch CV-Toposheet from the desktop or Start Menu
-  2. A browser window opens at http://127.0.0.1:5000
+  2. The app window opens automatically (no browser needed)
   3. Click [Settings] and enter your API key
      (Groq is free: https://console.groq.com)
   4. Upload a toposheet and click Process
