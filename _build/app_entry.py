@@ -42,9 +42,9 @@ if getattr(sys, 'frozen', False) and len(sys.argv) > 1 and sys.argv[1].endswith(
     runpy.run_path(str(script_path), run_name='__main__')
     sys.exit(0)
 
-# ── Normal startup: launch Flask and open browser ─────────────────────────────
-import webbrowser
+# ── Normal startup: launch Flask + open native pywebview window ──────────────
 import threading
+import time
 
 from app import app as flask_app
 
@@ -52,13 +52,27 @@ HOST = '127.0.0.1'
 PORT = 5000
 
 
-def _open_browser():
-    import time
-    time.sleep(1.5)
-    webbrowser.open(f'http://{HOST}:{PORT}')
+def _run_flask():
+    """Run Flask server in a background daemon thread."""
+    flask_app.run(host=HOST, port=PORT, debug=False, use_reloader=False, threaded=True)
 
 
 if __name__ == '__main__':
-    print(f'CV-Toposheet starting at http://{HOST}:{PORT} ...')
-    threading.Thread(target=_open_browser, daemon=True).start()
-    flask_app.run(host=HOST, port=PORT, debug=False, use_reloader=False, threaded=True)
+    # 1. Start Flask in background thread
+    threading.Thread(target=_run_flask, daemon=True).start()
+
+    # 2. Wait briefly for Flask to be ready
+    time.sleep(1.5)
+
+    # 3. Open native app window (no browser, no address bar)
+    import webview
+    window = webview.create_window(
+        title='CV-Toposheet',
+        url=f'http://{HOST}:{PORT}',
+        width=1280,
+        height=820,
+        min_size=(900, 600),
+        resizable=True,
+        text_select=True,
+    )
+    webview.start()

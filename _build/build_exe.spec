@@ -25,6 +25,7 @@ block_cipher = None
 flask_datas,    flask_bins,    flask_hi    = collect_all('flask')
 werkzeug_datas, werkzeug_bins, werkzeug_hi = collect_all('werkzeug')
 jinja2_datas,   jinja2_bins,   jinja2_hi   = collect_all('jinja2')
+webview_datas,  webview_bins,  webview_hi  = collect_all('webview')
 
 
 def R(*parts):
@@ -33,7 +34,7 @@ def R(*parts):
 
 
 datas = (
-    flask_datas + werkzeug_datas + jinja2_datas
+    flask_datas + werkzeug_datas + jinja2_datas + webview_datas
     + [
         # ── Entry point (lives in _build/) ─────────────────────────
         (os.path.join(SPECPATH, 'app_entry.py'), '.'),
@@ -78,9 +79,10 @@ datas = (
 )
 
 hiddenimports = (
-    flask_hi + werkzeug_hi + jinja2_hi
+    flask_hi + werkzeug_hi + jinja2_hi + webview_hi
     + collect_submodules('flask')
     + collect_submodules('werkzeug')
+    + collect_submodules('webview')
     + [
         'utils', 'utils.coords_utils', 'utils.cpu_utils', 'utils.db_utils',
         'utils.image_utils', 'utils.llm_utils', 'utils.metadata_utils', 'utils.ocr_utils',
@@ -94,7 +96,9 @@ hiddenimports = (
         'google.oauth2', 'google.oauth2.service_account',
         'google.generativeai',
         'pandas', 'tqdm', 'psutil',
-        'dotenv', 'sqlite3', 'importlib', 'runpy', 'webbrowser', 'threading', 'queue',
+        'dotenv', 'sqlite3', 'importlib', 'runpy', 'threading', 'queue',
+        'webview', 'webview.platforms', 'webview.platforms.winforms',
+        'pythonnet', 'clr', 'bottle', 'proxy_tools',
     ]
 )
 
@@ -125,7 +129,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,
+    console=False,
     icon=os.path.join(SPECPATH, 'app_icon.ico'),
     disable_windowed_traceback=False,
     argv_emulation=False,

@@ -56,6 +56,7 @@ Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 MinVersion=10.0
+PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 ShowLanguageDialog=no
 DisableProgramGroupPage=yes
@@ -92,7 +93,7 @@ Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName} now (browser wi
 
 [Registry]
 ; Store app info in registry (shows in Add/Remove Programs details)
-Root: HKLM; Subkey: "Software\{#AppPublisher}\{#AppName}"; \
+Root: HKA; Subkey: "Software\{#AppPublisher}\{#AppName}"; \
     ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; \
     Flags: uninsdeletekey
 ; Optional auto-startup (only written in non-admin/per-user install mode)

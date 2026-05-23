@@ -641,3 +641,31 @@ notice like this when it starts in an interactive mode:
     This program comes with ABSOLUTELY NO WARRANTY.
     This is free software, and you are welcome to redistribute it
     under certain conditions; see <https://www.gnu.org/licenses/gpl-3.0.html>.
+
+-------------------------------------------------------------------------------
+THIRD-PARTY SOFTWARE NOTICES
+-------------------------------------------------------------------------------
+
+This application includes the following third-party open-source components:
+
+1. pywebview (https://pywebview.flowrl.com/)
+   License: BSD 3-Clause License
+   Copyright (c) 2014, Roman Sirokov
+   All rights reserved.
+
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions are met:
+   * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above copyright notice,
+     this list of conditions and the following disclaimer in the documentation
+     and/or other materials provided with the distribution.
+   * Neither the name of pywebview nor the names of its contributors may be
+     used to endorse or promote products derived from this software without
+     specific prior written permission.
+
+   THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+
+2. pythonnet (https://pythonnet.github.io/)
+   License: MIT License
+   Used internally by pywebview for Windows WebView2 integration.

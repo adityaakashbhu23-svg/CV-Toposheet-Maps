@@ -33,3 +33,6 @@ tqdm>=4.66.0
 
 # CPU monitoring + thermal throttle (cross-platform)
 psutil>=5.9.0
+
+# Native app window (no browser needed)
+pywebview>=6.0.0
