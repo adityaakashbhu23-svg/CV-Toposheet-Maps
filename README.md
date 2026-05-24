@@ -60,16 +60,19 @@ Open `.env` and fill in at least one LLM API key (Groq and Gemini are free):
 | `CLAUDE_API_KEY` | [console.anthropic.com](https://console.anthropic.com) | Paid |
 | `GROK_API_KEY` | [console.x.ai](https://console.x.ai) | Paid |
 
-**Step 2 — Google Cloud Vision (OCR) — optional but recommended:**
+**Step 2 — Google Cloud Vision service account JSON (strongly recommended for good results):**
 
-The highest-accuracy OCR uses Google Cloud Vision. To enable it:
+> ⚠️ **Without this file, OCR quality will be significantly lower.** The app falls back to EasyOCR which misses many place names, especially on older or faded maps. For any serious use, the GCV service account JSON is essential.
+
+To set it up:
 
 1. Create a [Google Cloud project](https://console.cloud.google.com)
 2. Enable the **Cloud Vision API**
-3. Create a **Service Account** → generate a JSON key
-4. Save the JSON file as `service_account.json` in the project root
+3. Go to **IAM & Admin → Service Accounts** → Create a service account
+4. Under the service account → **Keys → Add Key → JSON** → download the file
+5. Save the downloaded JSON file as `service_account.json` in the project root
 
-> Without this, the app falls back to EasyOCR (free, slightly lower accuracy).
+Google Cloud Vision offers a **free tier of 1,000 OCR requests/month** — more than enough for most research use.
 
 **Step 3 — Vertex AI — optional (highest LLM accuracy):**
 
