@@ -34,7 +34,7 @@ Upload a scanned topographic map (JPG/PNG/TIF, up to 500 MB) and the pipeline:
 
 
 
-Supports Survey of India sheets, UK OS, USGS, German, French.
+Supports Survey of India sheets, UK OS, USGS, German and French.
 
 
 
