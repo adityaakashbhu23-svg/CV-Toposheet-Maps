@@ -10,7 +10,7 @@ Automated extraction of place names and geographic features from Survey of India
 
 Upload a scanned topographic map (JPG/PNG/TIF, up to 500 MB) and the pipeline:
 
-1. **Tiles** the map into 1024×1024 px patches (preserving full resolution)
+1. **Tiles** the map into 1024�-1024 px patches (preserving full resolution)
 2. **OCR** — Google Cloud Vision (primary), EasyOCR or Tesseract (fallback)
 3. **LLM cleaning** — removes noise, fixes spelling, classifies features (settlement / river / mountain / landmark)
 4. **Grid detection** — assigns lat/lon coordinates from the map's alphanumeric grid
