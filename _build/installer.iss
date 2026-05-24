@@ -51,6 +51,7 @@ OutputDir=.
 OutputBaseFilename=CVToposheet_Setup
 ; App icon (used on installer wizard, desktop shortcut, Add/Remove Programs)
 SetupIconFile={#IconFile}
+UninstallDisplayIcon={app}\{#AppExeName}
 WizardSmallImageFile=app_icon.png
 Compression=lzma2/ultra64
 SolidCompression=yes
@@ -103,7 +104,11 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
     Flags: uninsdeletevalue; Tasks: startupentry; Check: not IsAdminInstallMode
 
 [UninstallDelete]
-; Uncomment below to also remove user data on uninstall:
-; Type: filesandordirs; Name: "{app}\results"
-; Type: filesandordirs; Name: "{app}\maps"
-; Type: filesandordirs; Name: "{app}\logs"
+; Remove all user-generated data when the app is uninstalled
+Type: filesandordirs; Name: "{app}\results"
+Type: filesandordirs; Name: "{app}\maps"
+Type: filesandordirs; Name: "{app}\logs"
+Type: files;          Name: "{app}\.env"
+Type: files;          Name: "{app}\service_account.json"
+Type: files;          Name: "{app}\service_account2.json"
+Type: dirifempty;     Name: "{app}"
