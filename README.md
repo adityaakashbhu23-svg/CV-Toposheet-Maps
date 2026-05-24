@@ -150,8 +150,15 @@ The developer gratefully acknowledges the support of these organisations in maki
 
 ---
 
-## Disclaimer
+## Accuracy & Disclaimer
 
-This software is provided "as is", without warranty of any kind. Results may contain OCR or LLM errors — always verify extracted features against the original source maps before use in any research or publication.
+**This tool does not claim 100% accuracy.** OCR and LLM outputs are probabilistic — results will always contain some errors, missed names, or misclassifications depending on map quality, scan resolution, handwriting style, and the API tier used.
+
+- Older or faded maps will produce more errors than clean modern scans
+- Place names in non-English scripts may not extract correctly
+- Always cross-check extracted features against the original source map before using in any research, publication, or GIS project
+- Treat all outputs as a first-draft aid, not a definitive record
+
+This software is provided "as is", without warranty of any kind.
 
 Aditya Akash, the University of Cambridge, the Commonwealth Scholarship Commission, and CT Trust are not liable for any data loss, damage, or consequences arising from the use of this software.
