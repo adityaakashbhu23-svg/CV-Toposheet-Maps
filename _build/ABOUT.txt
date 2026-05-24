@@ -1,8 +1,8 @@
-================================================================
+=============================================================
   CV-TOPOSHEET
   AI-Powered Historical Toposheet Digitization System
   Version 1.0.0  |  May 2026
-================================================================
+=============================================================
 
 WHAT IS THIS APP?
 -----------------
@@ -107,8 +107,8 @@ AFTER INSTALLATION
   4. Upload a toposheet and click Process
 
 
-AUTHOR
-------
+DEVELOPER
+---------
   Aditya Akash
   MPhil Digital Humanities
   University of Cambridge
@@ -123,7 +123,7 @@ ACKNOWLEDGEMENTS
     * Commonwealth Scholarship Commission  (CSC)
     * CT Trust
 
-  The author gratefully acknowledges the support of these
+  The developer gratefully acknowledges the support of these
   organisations in making this research possible.
 
 
@@ -167,4 +167,4 @@ See LICENSE.txt for the full license text, or visit:
 https://www.gnu.org/licenses/gpl-3.0.html
 
 Copyright (C) 2026  Aditya Akash
-================================================================
+=============================================================

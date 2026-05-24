@@ -88,7 +88,7 @@ Name: "{autodesktop}\{#AppName}";       Filename: "{app}\{#AppExeName}"; IconFil
 
 [Run]
 ; Launch app after install (optional tick-box on final page)
-Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName} now (browser will open at http://127.0.0.1:5000)"; \
+Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName} now"; \
     Flags: nowait postinstall skipifsilent
 
 [Registry]
