@@ -16,22 +16,48 @@ Groq and Gemini are FREE - recommended for first use.
   Click [Settings] on the home page, then fill in
   one or more of the following:
 
-  - Groq API Key (FREE)
+  FREE OPTIONS (recommended for first-time users)
+  -----------------------------------------------
+  - Groq API Key (FREE - FASTEST)
       Get it at: https://console.groq.com
       Sign up > API Keys > Create new key > paste it in.
+      Model: LLaMA 3.3-70B. No credit card needed.
 
   - Gemini API Key (FREE)
       Get it at: https://aistudio.google.com/apikey
       Sign in with Google > Create API key > paste it in.
 
+  PREMIUM OPTIONS (higher accuracy)
+  ----------------------------------
+  - Vertex AI  (Google Cloud - uses GCP service account)
+      No separate API key needed.
+      Uses the same service_account.json from Step 2.
+      REQUIRES: Vertex AI API enabled + Vertex AI User
+      role granted on that service account.
+      See "VERTEX AI SETUP" section in Step 2 below.
+      In Settings: set AI Model to "vertex".
+
   - OpenAI API Key
       Get it at: https://platform.openai.com/api-keys
       (Requires a paid OpenAI account)
 
+  - Grok API Key (xAI)
+      Get it at: https://console.x.ai
+      Sign up > API Keys > Create > paste it in.
+
   Click [Save Settings] when done.
 
-  NOTE: Without at least one API key the pipeline cannot
-  run. You do NOT need all keys - one is enough.
+  NOTE: Without at least one API key the pipeline will run
+  BUT results will be wrong:
+    - Feature Type column will be BLANK for all rows
+    - Confidence will show 0.50 for everything
+    - Noise (numbers, punctuation, "8", ":", ",") will
+      appear in results instead of being filtered out
+    - You may see 2000-3000 rows instead of ~300 real features
+
+  If you see any of the above symptoms → go to Settings
+  and enter a Groq or Gemini API key, then re-process.
+  You do NOT need all keys - one is enough.
 
 
 ======================================================
@@ -41,13 +67,19 @@ STEP 2: UPLOAD YOUR GOOGLE CLOUD VISION JSON FILE
 The OCR engine uses Google Cloud Vision (GCV).
 You need a GCP Service Account JSON credentials file.
 
-  HOW TO GET THE JSON FILE:
+  HOW TO GET THE JSON FILE (for GCV OCR):
   1. Go to https://console.cloud.google.com
   2. Create (or open) a project.
-  3. Enable the "Cloud Vision API" for that project.
+  3. Enable the "Cloud Vision API" for that project:
+       Navigation menu > APIs & Services > Library
+       Search "Cloud Vision API" > Enable.
   4. Go to IAM & Admin > Service Accounts.
-  5. Create a service account > click it > Keys tab.
-  6. Add Key > Create new key > JSON > Download the file.
+  5. Click "+ Create Service Account" > give it a name
+     > Continue > Continue > Done.
+  6. Click the service account you just created.
+  7. Go to the "Keys" tab.
+  8. Add Key > Create new key > JSON > Create.
+     The JSON file downloads automatically.
 
   HOW TO ADD IT IN THE APP:
   1. Open the app > click [Settings].
@@ -61,6 +93,42 @@ You need a GCP Service Account JSON credentials file.
 
   NOTE: If you skip this step, the app falls back to
   EasyOCR (offline, slower, less accurate).
+
+
+------------------------------------------------------
+VERTEX AI SETUP  (only if you want the Vertex AI model)
+------------------------------------------------------
+
+  Vertex AI (Gemini 2.5-flash via Google Cloud) gives
+  the most accurate results but requires extra setup.
+  It uses the SAME JSON file as GCV above.
+
+  EXTRA STEPS after getting the JSON (steps 1-8 above):
+
+  A. Enable the Vertex AI API:
+       APIs & Services > Library
+       Search "Vertex AI API" > Enable.
+
+  B. Grant the service account the right role:
+       IAM & Admin > IAM > click Edit (pencil) next to
+       your service account email.
+       Add role: "Vertex AI User" > Save.
+
+  C. In the app:
+       Settings > AI Model > select "vertex".
+       Upload the same JSON in the GCV section.
+       Click Save Settings.
+
+  The app will now use Vertex AI (Gemini 2.5-flash)
+  for LLM cleaning automatically.
+
+  TROUBLESHOOT: If Vertex AI fails, check:
+   - Vertex AI API is enabled (step A)
+   - Service account has "Vertex AI User" role (step B)
+   - Billing is enabled on the GCP project
+   - The JSON file is the correct project's file
+  Vertex AI failure shows blank Feature Type + 0.50
+  confidence - switch to Groq in Settings as fallback.
 
 
 ======================================================
@@ -98,6 +166,14 @@ QUICK-START CHECKLIST
   [2] Settings > enter Groq or Gemini API key > Save
   [3] Settings > upload service_account.json > Save
   [4] Settings > set a PIN lock (optional but recommended)
+  [5] Upload a toposheet > click Process > wait ~1 minute
+  [6] Click "View Results" to see extracted features
+
+  RESULT QUALITY CHECK:
+  Good results  → Feature Type shows settlement/river/mountain etc.
+                  Confidence shows 0.80-1.00
+  Bad results   → Feature Type is blank, Confidence is 0.50
+                  Fix: add an API key in Settings (Step 2 above)
   [5] Upload a map image > choose a pipeline mode > Run!
 
 ======================================================

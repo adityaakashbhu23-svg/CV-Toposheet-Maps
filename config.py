@@ -2,12 +2,21 @@
 # Reads all settings from .env so no secrets are ever hardcoded.
 
 import os
+import sys
 from utils.cpu_utils import throttler as _throttler  # starts background monitor on import
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load .env from project root
-load_dotenv(Path(__file__).parent / '.env')
+# In frozen (PyInstaller EXE) mode, __file__ is inside _internal/ which may be
+# read-only (e.g. Program Files). Use the directory next to the EXE for all
+# user-writable data: .env, service account JSONs, maps, results, logs.
+if getattr(sys, 'frozen', False):
+    _DATA_DIR = Path(sys.executable).parent   # install dir next to the EXE
+else:
+    _DATA_DIR = Path(__file__).parent          # project root (dev mode)
+
+# Load .env from the data dir
+load_dotenv(_DATA_DIR / '.env')
 
 # ── API Keys ──────────────────────────────────────────────────
 OPENAI_API_KEY  = os.getenv('OPENAI_API_KEY', '')
@@ -45,10 +54,10 @@ VERTEX_MODEL    = os.getenv('VERTEX_MODEL',    'gemini-2.5-flash')
 # Priority: service_account2.json → Service_account_Backup.json
 _gcv_creds_rel  = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', '')
 if _gcv_creds_rel:
-    _gcv_creds_path = Path(__file__).parent / _gcv_creds_rel
+    _gcv_creds_path = _DATA_DIR / _gcv_creds_rel
 else:
-    _primary_path  = Path(__file__).parent / 'service_account2.json'
-    _backup_path   = Path(__file__).parent / 'Service_account_Backup.json'
+    _primary_path  = _DATA_DIR / 'service_account2.json'
+    _backup_path   = _DATA_DIR / 'Service_account_Backup.json'
     if _primary_path.exists():
         _gcv_creds_path = _primary_path
     elif _backup_path.exists():
@@ -59,11 +68,11 @@ if _gcv_creds_path.exists():
     os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(_gcv_creds_path)
     _which = _gcv_creds_path.name
     if 'backup' in _which.lower() or 'Backup' in _which:
-        print(f'[Config/GCV] ⚠️  Primary service_account2.json not found — using BACKUP: {_which}')
+        print(f'[Config/GCV] WARN: Primary service_account2.json not found - using BACKUP: {_which}')
     else:
-        print(f'[Config/GCV] ✅  GCV credentials loaded: {_which}')
+        print(f'[Config/GCV] OK: GCV credentials loaded: {_which}')
 else:
-    print(f'[Config/GCV] ❌  No GCV service account found — GCV OCR will fail. Upload one in ⚙️ Settings.')
+    print(f'[Config/GCV] ERROR: No GCV service account found - GCV OCR will fail. Upload one in Settings.')
 
 # ── OCR / Tiling ──────────────────────────────────────────────
 OCR_ENGINE      = os.getenv('OCR_ENGINE', 'gcv').lower()   # gcv | easyocr | tesseract
@@ -94,7 +103,7 @@ GRID_DEFAULT_COLS = int(os.getenv('GRID_DEFAULT_COLS', '4'))
 GRID_DEFAULT_ROWS = int(os.getenv('GRID_DEFAULT_ROWS', '4'))
 
 # ── Paths ─────────────────────────────────────────────────────
-BASE_DIR        = Path(__file__).parent
+BASE_DIR        = _DATA_DIR
 MAPS_FOLDER     = BASE_DIR / os.getenv('MAPS_FOLDER',    'maps')
 RESULTS_FOLDER  = BASE_DIR / os.getenv('RESULTS_FOLDER', 'results')
 LOGS_FOLDER     = BASE_DIR / os.getenv('LOGS_FOLDER',    'logs')

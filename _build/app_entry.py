@@ -6,7 +6,7 @@
 # Two modes when frozen:
 #
 #   1. Normal startup:   CVToposheet.exe
-#      → starts the Flask server and opens the browser automatically.
+#      → starts the Flask server and opens the native app window (pywebview).
 #
 #   2. Script runner:    CVToposheet.exe some_script.py [args...]
 #      → app.py calls subprocess([sys.executable, 'script.py']).
@@ -16,7 +16,17 @@
 
 import sys
 import os
+import io
 from pathlib import Path
+
+# Force UTF-8 stdout/stderr so emoji/unicode in print() never crash the EXE
+try:
+    if sys.stdout is not None and hasattr(sys.stdout, 'buffer'):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    if sys.stderr is not None and hasattr(sys.stderr, 'buffer'):
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+except Exception:
+    pass
 
 # ── Add project root to sys.path (needed when running from _build/) ───────────
 _this_dir = Path(__file__).resolve().parent   # _build/
@@ -46,10 +56,26 @@ if getattr(sys, 'frozen', False) and len(sys.argv) > 1 and sys.argv[1].endswith(
 import threading
 import time
 
+import socket
+
 from app import app as flask_app
 
 HOST = '127.0.0.1'
-PORT = 5000
+
+
+def _find_free_port(start: int = 5000, end: int = 5100) -> int:
+    """Return the first available TCP port in [start, end)."""
+    for p in range(start, end):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind((HOST, p))
+                return p
+            except OSError:
+                continue
+    raise RuntimeError(f'No free TCP port found in range {start}–{end}')
+
+
+PORT = _find_free_port()
 
 
 def _run_flask():
@@ -57,15 +83,28 @@ def _run_flask():
     flask_app.run(host=HOST, port=PORT, debug=False, use_reloader=False, threaded=True)
 
 
+def _wait_for_flask(host: str, port: int, timeout: float = 30.0) -> bool:
+    """Poll until Flask is accepting connections, then return True."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=0.5):
+                return True
+        except OSError:
+            time.sleep(0.1)
+    return False
+
+
 if __name__ == '__main__':
     # 1. Start Flask in background thread
     threading.Thread(target=_run_flask, daemon=True).start()
 
-    # 2. Wait briefly for Flask to be ready
-    time.sleep(1.5)
+    # 2. Wait until Flask is actually ready (not just a fixed sleep)
+    _wait_for_flask(HOST, PORT)
 
-    # 3. Open native app window (no browser, no address bar)
+    # 3. Open native app window (pywebview — no browser, no address bar)
     import webview
+
     window = webview.create_window(
         title='CV-Toposheet',
         url=f'http://{HOST}:{PORT}',
@@ -75,4 +114,23 @@ if __name__ == '__main__':
         resizable=True,
         text_select=True,
     )
+
+    def _intercept_new_windows():
+        """
+        After every page load: override window.open() so nothing can
+        escape to the system browser.  Any popup/new-tab attempt is
+        silently redirected to navigate the app window itself.
+        """
+        window.evaluate_js("""
+            (function() {
+                var _orig = window.open;
+                window.open = function(url, target, features) {
+                    if (url) { window.location.href = url; }
+                    return null;
+                };
+            })();
+        """)
+
+    window.events.loaded += _intercept_new_windows
+
     webview.start()

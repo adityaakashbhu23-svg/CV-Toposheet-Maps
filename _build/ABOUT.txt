@@ -53,6 +53,42 @@ IMPORTANT NOTES
   * Keep your API keys secure and do not share them
 
 
+WHAT YOU WILL NEED  (before you can process maps)
+--------------------------------------------------
+  The app is free to install but requires at least one
+  API key to work correctly. Without it, results will
+  be blank/incorrect.
+
+  [REQUIRED - choose ONE]
+  Groq API key  (FREE - recommended)  ->  console.groq.com
+    Sign up > API Keys > Create > copy the key
+    Fastest option. No credit card needed.
+
+  -- OR --
+
+  Google Gemini API key  (FREE)  ->  aistudio.google.com
+  OpenAI API key         (PAID)  ->  platform.openai.com
+  Grok API key (xAI)     (PAID)  ->  console.x.ai
+
+  -- OR (PREMIUM - highest accuracy) --
+
+  Vertex AI (Google Cloud Gemini 2.5-flash)
+    No separate API key - uses GCP service account JSON.
+    Requires: Cloud Vision API + Vertex AI API enabled,
+    "Vertex AI User" role on the service account.
+    See full setup steps in AFTER_INSTALL instructions.
+
+  [OPTIONAL but improves OCR accuracy]
+  Google Cloud Vision service account JSON
+    ->  console.cloud.google.com
+    Enable "Cloud Vision API" > Service Accounts >
+    Create key (JSON) > download the file.
+    If you skip this, the app uses EasyOCR (offline, slower).
+
+  You will be guided through entering these in the app
+  after installation via Settings.
+
+
 SYSTEM REQUIREMENTS
 -------------------
   * Windows 10 or later (64-bit)
@@ -71,6 +107,26 @@ AFTER INSTALLATION
   4. Upload a toposheet and click Process
 
 
+AUTHOR
+------
+  Aditya Akash
+  MPhil Digital Humanities
+  University of Cambridge
+
+
+ACKNOWLEDGEMENTS
+----------------
+  This software was developed as part of an MPhil research
+  project in Digital Humanities at the University of Cambridge.
+
+  Funded by:
+    * Commonwealth Scholarship Commission  (CSC)
+    * CT Trust
+
+  The author gratefully acknowledges the support of these
+  organisations in making this research possible.
+
+
 DISCLAIMER
 ----------
 This software is provided "as is", without warranty of any
@@ -79,9 +135,10 @@ network issues, or unsupported map formats. Always verify
 extracted data against the original source maps before use
 in any research or publication.
 
-The author and funders are not liable for any data loss,
-damage, or consequences arising from the use of this software.
-Use it at your own risk.
+Aditya Akash, the University of Cambridge, the Commonwealth
+Scholarship Commission, and CT Trust are not liable for any
+data loss, damage, or consequences arising from the use of
+this software. Use it at your own risk.
 
 
 ABOUT

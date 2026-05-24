@@ -251,6 +251,7 @@ tr:hover td {{ background:#f5f8ff; }}
 .badge-road        {{ background:#7f8c8d; }}
 .badge-lake        {{ background:#0288d1; }}
 .badge-noise       {{ background:#bdc3c7; color:#555; }}
+.badge-unknown     {{ background:#e0e0e0; color:#888; }}
 .no-rows {{ text-align:center; padding:40px; color:#bbb; }}
 
 /* ── Compare Panel ── */
@@ -480,7 +481,7 @@ function deleteSelected() {{
     }});
     onToggle();
   }}
-  fetch('http://localhost:5000/delete_maps', {{
+  fetch(window.location.origin + '/delete_maps', {{
     method:'POST', headers:{{'Content-Type':'application/json'}},
     body: JSON.stringify({{maps:keys}})
   }})
@@ -489,7 +490,7 @@ function deleteSelected() {{
     if (d.ok) {{ removeDom(); alert('\u2714 Deleted ' + keys.length + ' map(s).'); }}
     else {{ alert('Error: ' + (d.error||'Unknown')); }}
   }})
-  .catch(function() {{ removeDom(); alert('Removed from view.\\nOpen via http://localhost:5000/results to persist.'); }});
+  .catch(function() {{ removeDom(); alert('Removed from view.'); }});
 }}
 
 /* ── Compare (works on full DATA array — no DOM scanning) ─────────── */

@@ -20,7 +20,12 @@ from urllib.parse import quote as url_quote
 
 from flask import Flask, request, redirect, url_for, send_file, Response, stream_with_context
 
-BASE_DIR = Path(__file__).parent
+# In a frozen PyInstaller EXE, __file__ is inside _internal/ (read-only bundle dir).
+# User-writable data (maps, results, .env, JSON credentials) must go next to the EXE.
+if getattr(sys, 'frozen', False):
+    BASE_DIR = Path(sys.executable).parent   # install dir  e.g. C:\...\CV-Toposheet\
+else:
+    BASE_DIR = Path(__file__).parent          # project root (dev mode)
 ENV_FILE = BASE_DIR / '.env'
 
 RESULTS_DIR = BASE_DIR / 'results'
@@ -702,7 +707,7 @@ body { min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; b
     <div class="hdr-sub">Extracted Map Features</div>
   </div>
   <div class="hdr-actions">
-    <a href="/results" class="db-banner-btn" title="View all processed maps in the database" target="_blank">&#128202;&nbsp;<span class="db-label">Map Database</span></a>
+    <a href="/results" class="db-banner-btn" title="View all processed maps in the database">&#128202;&nbsp;<span class="db-label">Map Database</span></a>
     <button class="kill-banner-btn" id="killBannerBtn" onclick="killRunningJob()" title="Kill any running job and restart the server">&#9632;<span class="kill-label"> Restart Server</span></button>
     <button class="settings-btn" onclick="openSettings()">&#9881;&#xFE0E;<span class="settings-label"> Settings</span></button>
   </div>
@@ -1036,7 +1041,7 @@ function uploadJsonFile(inputId, targetName, statusId) {
   fetch('/upload_service_account', { method:'POST', body:fd })
     .then(r => r.json())
     .then(d => {
-      if (d.ok) { statusEl.style.color='#16a34a'; statusEl.textContent='\u2713 Saved as ' + d.saved; }
+      if (d.ok) { statusEl.style.color='#16a34a'; statusEl.textContent='\u2713 ' + fileInput.files[0].name + ' uploaded successfully'; }
       else      { statusEl.style.color='#c00';     statusEl.textContent='Error: ' + (d.error||'failed'); }
     }).catch(() => { statusEl.style.color='#c00'; statusEl.textContent='Upload failed.'; });
 }
