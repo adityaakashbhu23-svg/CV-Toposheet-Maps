@@ -125,4 +125,30 @@ See [LICENSE.txt](LICENSE.txt)
 
 ---
 
-*Developed by Aditya Akash*
+## About the Developer
+
+**Aditya Akash**  
+MPhil in Digital Humanities  
+University of Cambridge
+
+Heritage professional specialising in heritage documentation and geospatial analysis. This project applies AI-driven computer vision to the digitization of historical toposheets and cartographic records.
+
+---
+
+## Funding & Acknowledgements
+
+This software was developed as part of an MPhil research project in Digital Humanities at the University of Cambridge.
+
+Funded by:
+- **Commonwealth Scholarship Commission (CSC)**
+- **Cambridge Trust (CT Trust)**
+
+The developer gratefully acknowledges the support of these organisations in making this research possible.
+
+---
+
+## Disclaimer
+
+This software is provided "as is", without warranty of any kind. Results may contain OCR or LLM errors — always verify extracted features against the original source maps before use in any research or publication.
+
+Aditya Akash, the University of Cambridge, the Commonwealth Scholarship Commission, and CT Trust are not liable for any data loss, damage, or consequences arising from the use of this software.
