@@ -320,9 +320,5 @@ The developer gratefully acknowledges the support of these organisations in maki
 
 
 
-This software is provided "as is", without warranty of any kind.
-
-
-
 Aditya Akash, the University of Cambridge, the Commonwealth Scholarship Commission, and CT Trust are not liable for any data loss, damage, or consequences arising from the use of this software.
 
