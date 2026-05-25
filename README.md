@@ -101,14 +101,11 @@ cp .env.example .env
 ```
 
 
-
 Open `.env` and fill in at least one LLM API key (Groq and Gemini are free):
 
 
 
 | Key | Where to get it | Free? |
-
-|-----|----------------|-------|
 
 | `GROQ_API_KEY` | [console.groq.com](https://console.groq.com) | ✅ Free |
 
@@ -125,14 +122,9 @@ Open `.env` and fill in at least one LLM API key (Groq and Gemini are free):
 **Step 2 - Google Cloud Vision service account JSON (strongly recommended for good results):**
 
 
-
 > ⚠️ **Without this file, OCR quality will be significantly lower.** The app falls back to EasyOCR which misses many place names, especially on older or faded maps. For any serious use, the GCV service account JSON is essential.
 
-
-
 To set it up:
-
-
 
 1. Create a [Google Cloud project](https://console.cloud.google.com)
 
@@ -144,19 +136,12 @@ To set it up:
 
 5. Save the downloaded JSON file as `service_account.json` in the project root
 
-
-
 Google Cloud Vision offers a **free tier of 1,000 OCR requests/month** - more than enough for most research use.
-
 
 
 **Step 3 - Vertex AI - optional (highest LLM accuracy):**
 
-
-
 If you want to use Vertex AI (Gemini via Google Cloud):
-
-
 
 1. Enable **Vertex AI API** in your Google Cloud project
 
@@ -164,10 +149,7 @@ If you want to use Vertex AI (Gemini via Google Cloud):
 
 3. Set `LLM_PROVIDER=vertex` and `VERTEX_PROJECT=your-project-id` in `.env`
 
-
-
 ### Running the app
-
 
 
 ```bash
@@ -176,43 +158,22 @@ python app.py
 
 ```
 
-
-
-Open [http://127.0.0.1:5000](http://127.0.0.1:5000) in your browser.
-
-
-
----
-
-
+Open [http://127.0.0.1:5000](http://127.0.0.1:5000) in your browser
 
 ## Files NOT included (add your own)
 
 
-
 | File | Purpose |
-
-|------|---------|
 
 | `.env` | Your API keys - copy from `.env.example` |
 
 | `service_account.json` | Google Cloud Vision + Vertex AI credentials |
 
 
-
 These are excluded from the repository for security. **Never commit them to git.**
 
 
-
----
-
-
-
 ## Project structure
-
-
-
-```
 
 app.py                  Flask web server + UI
 
@@ -238,29 +199,12 @@ results/                Output database (auto-generated)
 
 .env.example            API key template - copy to .env
 
-```
-
-
-
----
-
-
 
 ## License
 
-
-
 See [LICENSE.txt](LICENSE.txt)
 
-
-
----
-
-
-
 ## About the Developer
-
-
 
 **Aditya Akash**  
 
@@ -268,23 +212,11 @@ MPhil in Digital Humanities
 
 University of Cambridge
 
-
-
 Heritage professional specialising in heritage documentation and geospatial analysis. This project applies AI-driven computer vision to the digitization of historical toposheets and cartographic records.
-
-
-
----
-
-
 
 ## Funding & Acknowledgements
 
-
-
 This software was developed as part of an MPhil research project in Digital Humanities at the University of Cambridge.
-
-
 
 Funded by:
 
@@ -292,23 +224,13 @@ Funded by:
 
 - **Cambridge Trust (CT Trust)**
 
-
-
 The developer gratefully acknowledges the support of these organisations in making this research possible.
-
-
 
 ---
 
-
-
 ## Accuracy & Disclaimer
 
-
-
 **This tool does not claim 100% accuracy.** OCR and LLM outputs are probabilistic - results will always contain some errors, missed names, or misclassifications depending on map quality, scan resolution, handwriting style, and the API tier used.
-
-
 
 - Older or faded maps will produce more errors than clean modern scans
 
@@ -318,11 +240,7 @@ The developer gratefully acknowledges the support of these organisations in maki
 
 - Treat all outputs as a first-draft aid, not a definitive record
 
-
-
 This software is provided "as is", without warranty of any kind.
-
-
 
 Aditya Akash, the University of Cambridge, the Commonwealth Scholarship Commission, and CT Trust are not liable for any data loss, damage, or consequences arising from the use of this software.
 
