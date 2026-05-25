@@ -53,12 +53,11 @@ OutputBaseFilename=CVToposheet_Setup
 SetupIconFile={#IconFile}
 UninstallDisplayIcon={app}\{#AppExeName}
 WizardSmallImageFile=app_icon.png
-Compression=lzma2/ultra64
-SolidCompression=yes
+Compression=zip
+SolidCompression=no
 WizardStyle=modern
 MinVersion=10.0
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
 ShowLanguageDialog=no
 DisableProgramGroupPage=yes
 

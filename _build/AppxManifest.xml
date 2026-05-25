@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AppxManifest.xml - MSIX Package Manifest for CV-Toposheet
+  ─────────────────────────────────────────────────────────────
+  BEFORE SUBMITTING TO MICROSOFT STORE:
+    1. Change Publisher to your exact Partner Center publisher CN.
+       Partner Center → Account settings → Organization profile → Publisher
+       Example:  CN=Aditya Akash, O=Aditya Akash, C=IN
+    2. Change Name to the Package/Identity/Name shown in Partner Center.
+    3. Version is always 4-part: MAJOR.MINOR.PATCH.0
+  ─────────────────────────────────────────────────────────────
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <Identity
+    Name="AdityaAkash.CVToposheet"
+    Publisher="CN=7B768A78-BA7A-475F-9260-2205DAE591E5"
+    Version="1.0.0.0"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>CV Toposheet</DisplayName>
+    <PublisherDisplayName>Aditya Akash</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>AI-Powered Historical Toposheet Digitization System</Description>
+  </Properties>
+
+  <!-- Windows 10 1809+ minimum (required for Desktop Bridge / MSIX Win32 apps) -->
+  <Dependencies>
+    <TargetDeviceFamily
+      Name="Windows.Desktop"
+      MinVersion="10.0.17763.0"
+      MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-US" />
+  </Resources>
+
+  <Applications>
+    <Application
+      Id="CVToposheet"
+      Executable="CVToposheet.exe"
+      EntryPoint="Windows.FullTrustApplication">
+
+      <uap:VisualElements
+        DisplayName="CV-Toposheet"
+        Description="AI-Powered Historical Toposheet Digitization System"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png"
+        BackgroundColor="transparent">
+
+        <uap:DefaultTile
+          Wide310x150Logo="Assets\Wide310x150Logo.png"
+          Square310x310Logo="Assets\Square310x310Logo.png"
+          ShortName="CV-Toposheet">
+          <uap:ShowNameOnTiles>
+            <uap:ShowOn Tile="square150x150Logo" />
+            <uap:ShowOn Tile="wide310x150Logo" />
+            <uap:ShowOn Tile="square310x310Logo" />
+          </uap:ShowNameOnTiles>
+        </uap:DefaultTile>
+
+        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#1a1a2e" />
+
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!-- Required for all Win32/PyInstaller apps packaged as MSIX -->
+    <rescap:Capability Name="runFullTrust" />
+    <!-- Outbound HTTP: LLM APIs, Google Vision API -->
+    <Capability Name="internetClient" />
+    <!-- Local Flask server the app runs internally -->
+    <Capability Name="privateNetworkClientServer" />
+  </Capabilities>
+
+</Package>

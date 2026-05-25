@@ -15,8 +15,13 @@ build/
 
 # Build outputs - large binary files not for git
 _build/CVToposheet_Setup.exe
+_build/*.msix
 _build/dist/
 _build/work/
+_build/msix_staging/
+_build/build_log.txt
+_build/build_err.txt
+Final App/
 
 # Output files (can be regenerated)
 results/
