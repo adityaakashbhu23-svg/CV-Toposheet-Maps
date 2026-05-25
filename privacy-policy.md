@@ -1,4 +1,4 @@
-# Privacy Policy for CV Toposheet
+# Privacy Policy (CV Toposheet)
 
 **Last updated: May 25, 2026**
 
