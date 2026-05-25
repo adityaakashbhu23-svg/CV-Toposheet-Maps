@@ -17,12 +17,12 @@ The App optionally uses the following external APIs when configured by the user.
 **OCR (map image processing):**
 - **Google Cloud Vision API** — sends map image tiles for text recognition. Governed by [Google's Privacy Policy](https://policies.google.com/privacy).
 
-**LLM (text cleaning — user's choice of one):**
-- **Groq API** — sends extracted map text for correction. Governed by [Groq's Privacy Policy](https://groq.com/privacy-policy/).
-- **Google Gemini API** — sends extracted map text for correction. Governed by [Google's Privacy Policy](https://policies.google.com/privacy).
-- **OpenAI API** — sends extracted map text for correction. Governed by [OpenAI's Privacy Policy](https://openai.com/policies/privacy-policy).
-- **Anthropic Claude API** — sends extracted map text for correction. Governed by [Anthropic's Privacy Policy](https://www.anthropic.com/privacy).
-- **xAI Grok API** — sends extracted map text for correction. Governed by [xAI's Privacy Policy](https://x.ai/privacy-policy).
+**LLM (text cleaning user's choice of one):**
+- **Groq API** - sends extracted map text for correction. Governed by [Groq's Privacy Policy](https://groq.com/privacy-policy/).
+- **Google Gemini API** - sends extracted map text for correction. Governed by [Google's Privacy Policy](https://policies.google.com/privacy).
+- **OpenAI API** - sends extracted map text for correction. Governed by [OpenAI's Privacy Policy](https://openai.com/policies/privacy-policy).
+- **Anthropic Claude API** - sends extracted map text for correction. Governed by [Anthropic's Privacy Policy](https://www.anthropic.com/privacy).
+- **xAI Grok API** - sends extracted map text for correction. Governed by [xAI's Privacy Policy](https://x.ai/privacy-policy).
 
 Only the API(s) the user explicitly configures are contacted. No data is sent to any service the user has not set up.
 
