@@ -112,6 +112,7 @@ if __name__ == '__main__':
         height=820,
         min_size=(900, 600),
         resizable=True,
+        maximized=True,
         text_select=True,
     )
 

@@ -572,166 +572,226 @@ _WELCOME_TEMPLATE = """<!DOCTYPE html>
 <title>Welcome to CV-Toposheet</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
-body { min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; background:#f0f4f8; display:flex; flex-direction:column; }
-.hdr { background:#0E7490; padding:14px 28px; flex-shrink:0; }
-.hdr-logo { font-size:1.25em; font-weight:700; color:#fff; letter-spacing:-.01em; }
-.hdr-sub  { font-size:0.78em; color:rgba(255,255,255,.75); margin-top:2px; }
-.page { flex:1; overflow-y:auto; padding:24px 16px 40px; display:flex; flex-direction:column; align-items:center; gap:18px; }
-.hero { text-align:center; max-width:640px; }
-.hero h1 { font-size:1.6em; color:#0E7490; font-weight:800; margin-bottom:6px; }
-.hero p  { font-size:0.92em; color:#4a6070; line-height:1.5; }
-.steps { display:flex; flex-direction:column; gap:14px; width:100%; max-width:680px; }
-.step { background:#fff; border-radius:14px; box-shadow:0 2px 14px rgba(14,116,144,.09); border:1.5px solid #d4eaf0; overflow:hidden; }
-.step-hdr { display:flex; align-items:center; gap:14px; padding:14px 18px; background:#f0f9fb; border-bottom:1.5px solid #d4eaf0; cursor:pointer; user-select:none; }
-.step-num { width:34px; height:34px; border-radius:50%; background:#0E7490; color:#fff; font-size:1em; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-.step-title { flex:1; font-weight:700; font-size:1em; color:#1e3a4a; }
-.step-badge { font-size:0.72em; font-weight:700; border-radius:4px; padding:2px 8px; }
+html, body { height:100%; overflow:hidden; font-family:'Segoe UI', system-ui, Arial, sans-serif; background:#f0f4f8; }
+.shell { display:flex; flex-direction:column; height:100vh; }
+
+/* Header */
+.hdr { background:#0E7490; padding:12px 28px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; }
+.hdr-logo { font-size:1.15em; font-weight:700; color:#fff; }
+.hdr-sub  { font-size:0.76em; color:rgba(255,255,255,.75); margin-top:1px; }
+.hdr-step { font-size:0.82em; color:rgba(255,255,255,.85); font-weight:600; background:rgba(255,255,255,.15); padding:4px 12px; border-radius:20px; }
+
+/* Progress bar */
+.prog { height:3px; background:rgba(14,116,144,.15); flex-shrink:0; }
+.prog-fill { height:100%; background:#22d3ee; transition:width .35s ease; }
+
+/* Slide container */
+.slides { flex:1; position:relative; overflow:hidden; }
+.slide { position:absolute; inset:0; display:flex; justify-content:center; align-items:flex-start; padding:28px 20px 20px; overflow:hidden; transition:opacity .25s, transform .25s; }
+.slide.hidden { opacity:0; pointer-events:none; transform:translateX(40px); }
+.slide.hidden-left { opacity:0; pointer-events:none; transform:translateX(-40px); }
+.inner { width:100%; max-width:680px; display:flex; flex-direction:column; gap:14px; }
+
+/* Slide title */
+.slide-icon { font-size:2em; text-align:center; }
+.slide-title { font-size:1.35em; font-weight:800; color:#0E7490; text-align:center; }
+.slide-sub   { font-size:0.88em; color:#4a6070; text-align:center; line-height:1.5; }
+
+/* Cards */
+.card { background:#fff; border-radius:12px; border:1.5px solid #d4eaf0; padding:14px 18px; box-shadow:0 2px 10px rgba(14,116,144,.07); }
+.card-row { display:flex; align-items:flex-start; gap:12px; }
+.card-icon { font-size:1.4em; flex-shrink:0; margin-top:2px; }
+.card-title { font-weight:700; color:#0E7490; font-size:0.95em; margin-bottom:2px; }
+.card-desc  { font-size:0.84em; color:#5a7a8a; line-height:1.5; }
+.card-link  { font-size:0.83em; color:#0891b2; margin-top:3px; }
+.badge { display:inline-block; font-size:0.7em; font-weight:700; border-radius:4px; padding:2px 7px; margin-left:6px; vertical-align:middle; }
 .badge-free { background:#dcfce7; color:#166534; }
 .badge-opt  { background:#fef9c3; color:#92400e; }
-.badge-req  { background:#fee2e2; color:#b91c1c; }
-.step-body { padding:14px 18px; font-size:0.87em; color:#334; line-height:1.6; }
-.step-body p { margin-bottom:8px; }
-.step-body p:last-child { margin-bottom:0; }
-.opt-row { display:flex; align-items:flex-start; gap:8px; padding:7px 10px; border-radius:7px; margin-bottom:6px; border:1px solid #e0e7ef; background:#f8fafc; }
-.opt-icon { font-size:1.2em; flex-shrink:0; margin-top:1px; }
-.opt-body { flex:1; }
-.opt-name { font-weight:700; color:#0E7490; font-size:0.95em; }
-.opt-desc { font-size:0.88em; color:#6b8a99; }
-.opt-link { font-size:0.85em; color:#0891b2; }
-.divider { font-size:0.78em; color:#999; text-align:center; margin:4px 0; font-weight:600; }
-.note { background:#fff7ed; border:1px solid #fed7aa; border-radius:7px; padding:8px 12px; font-size:0.83em; color:#92400e; }
-.note b { color:#c2410c; }
-.what-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px; margin-top:4px; }
-.what-card { background:#f0f9fb; border:1px solid #b8dde8; border-radius:8px; padding:8px 10px; }
-.what-card .wc-num { font-size:1.1em; font-weight:800; color:#0E7490; }
-.what-card .wc-title { font-weight:700; font-size:0.88em; color:#1e3a4a; }
-.what-card .wc-desc { font-size:0.78em; color:#6b8a99; margin-top:2px; }
-.footer { width:100%; max-width:680px; display:flex; justify-content:flex-end; }
-.start-btn { background:linear-gradient(135deg,#0e7490,#0891b2); color:#fff; border:none; border-radius:10px; padding:14px 36px; font-size:1.05em; font-weight:800; cursor:pointer; box-shadow:0 3px 14px rgba(14,116,144,.35); letter-spacing:.01em; transition:all .2s; }
-.start-btn:hover { background:linear-gradient(135deg,#0891b2,#06b6d4); box-shadow:0 6px 24px rgba(14,116,144,.5); transform:translateY(-1px); }
-.skip-link { text-align:center; font-size:0.82em; color:#888; }
-.skip-link a { color:#0E7490; cursor:pointer; text-decoration:underline; }
-@media (max-width:600px) {
-  .page { padding:16px 8px 32px; gap:12px; }
-  .hero h1 { font-size:1.3em; }
-  .step-body, .step-hdr { padding:11px 13px; }
-  .what-grid { grid-template-columns:1fr 1fr; }
-  .start-btn { width:100%; padding:14px; }
-  .footer { justify-content:stretch; }
-}
+.note { background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:9px 13px; font-size:0.83em; color:#92400e; line-height:1.5; }
+.what-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.wc { background:#f0f9fb; border:1px solid #b8dde8; border-radius:8px; padding:10px 12px; }
+.wc-num   { font-size:1.1em; font-weight:800; color:#0E7490; }
+.wc-title { font-weight:700; font-size:0.86em; color:#1e3a4a; }
+.wc-desc  { font-size:0.77em; color:#6b8a99; margin-top:2px; }
+.divider  { text-align:center; font-size:0.76em; color:#aaa; font-weight:700; letter-spacing:.04em; }
+.ready-big { text-align:center; font-size:3em; margin:4px 0; }
+.ready-list { display:flex; flex-direction:column; gap:8px; }
+.ready-row { display:flex; align-items:center; gap:10px; background:#fff; border:1.5px solid #d4eaf0; border-radius:10px; padding:11px 16px; }
+.ready-row .ri { font-size:1.3em; flex-shrink:0; }
+.ready-row .rt { font-size:0.88em; color:#2a4a5a; line-height:1.4; }
+.ready-row .rt b { color:#0E7490; }
+
+/* Footer nav */
+.nav { flex-shrink:0; background:#fff; border-top:1px solid #e0eaf0; padding:14px 28px; display:flex; align-items:center; justify-content:space-between; }
+.dots { display:flex; gap:8px; }
+.dot { width:8px; height:8px; border-radius:50%; background:#d0e8f0; transition:background .25s, transform .25s; }
+.dot.active { background:#0E7490; transform:scale(1.3); }
+.dot.done   { background:#67c8e0; }
+.btn { border:none; border-radius:9px; padding:11px 28px; font-size:0.95em; font-weight:700; cursor:pointer; transition:all .18s; }
+.btn-back { background:#f0f4f8; color:#5a7a8a; }
+.btn-back:hover { background:#e0eaf0; }
+.btn-next { background:linear-gradient(135deg,#0e7490,#0891b2); color:#fff; box-shadow:0 3px 12px rgba(14,116,144,.3); }
+.btn-next:hover { background:linear-gradient(135deg,#0891b2,#06b6d4); box-shadow:0 5px 18px rgba(14,116,144,.45); transform:translateY(-1px); }
+.btn-start { background:linear-gradient(135deg,#0e7490,#0891b2); color:#fff; padding:11px 32px; box-shadow:0 3px 12px rgba(14,116,144,.3); }
+.btn-start:hover { background:linear-gradient(135deg,#0891b2,#06b6d4); box-shadow:0 5px 18px rgba(14,116,144,.45); transform:translateY(-1px); }
+.invisible { visibility:hidden; }
 </style>
 </head>
 <body>
-<div class="hdr">
-  <div class="hdr-logo">CV-Toposheet</div>
-  <div class="hdr-sub">AI-Powered Historical Toposheet Digitization</div>
-</div>
+<div class="shell">
 
-<div class="page">
-  <div class="hero">
-    <h1>&#128255; Welcome to CV-Toposheet!</h1>
-    <p>Complete the 3 quick steps below before processing your first map.<br>
-    This screen only appears once &mdash; your settings are saved permanently.</p>
+  <!-- Header -->
+  <div class="hdr">
+    <div>
+      <div class="hdr-logo">CV-Toposheet</div>
+      <div class="hdr-sub">AI-Powered Historical Toposheet Digitization</div>
+    </div>
+    <div class="hdr-step" id="stepLabel">Step 1 of 4</div>
   </div>
+  <div class="prog"><div class="prog-fill" id="progFill" style="width:25%"></div></div>
 
-  <!-- WHAT IS THIS APP -->
-  <div class="steps">
-    <div class="step">
-      <div class="step-hdr">
-        <div class="step-num">&#128269;</div>
-        <div class="step-title">What Does This App Do?</div>
-      </div>
-      <div class="step-body">
-        <p>CV-Toposheet automatically extracts and digitizes geographic feature names from scanned historical topographic maps. It converts old paper maps into a searchable database of place names, rivers, roads, villages, elevation markers and more.</p>
+  <!-- Slides -->
+  <div class="slides">
+
+    <!-- Slide 1: What is this app -->
+    <div class="slide" id="slide0">
+      <div class="inner">
+        <div class="slide-icon">&#128255;</div>
+        <div class="slide-title">Welcome to CV-Toposheet!</div>
+        <div class="slide-sub">Automatically extract &amp; digitize geographic feature names from scanned historical topographic maps.</div>
         <div class="what-grid">
-          <div class="what-card"><div class="wc-num">1</div><div class="wc-title">Upload</div><div class="wc-desc">Upload a scanned toposheet (JPG/PNG/TIF)</div></div>
-          <div class="what-card"><div class="wc-num">2</div><div class="wc-title">OCR</div><div class="wc-desc">AI reads all text from every tile</div></div>
-          <div class="what-card"><div class="wc-num">3</div><div class="wc-title">Clean</div><div class="wc-desc">LLM corrects errors &amp; classifies features</div></div>
-          <div class="what-card"><div class="wc-num">4</div><div class="wc-title">Search</div><div class="wc-desc">Query &amp; export the results database</div></div>
+          <div class="wc"><div class="wc-num">1</div><div class="wc-title">Upload</div><div class="wc-desc">Drop a scanned toposheet (JPG / PNG / TIF)</div></div>
+          <div class="wc"><div class="wc-num">2</div><div class="wc-title">OCR</div><div class="wc-desc">AI reads all text from every tile of the map</div></div>
+          <div class="wc"><div class="wc-num">3</div><div class="wc-title">Clean</div><div class="wc-desc">LLM corrects errors &amp; classifies features</div></div>
+          <div class="wc"><div class="wc-num">4</div><div class="wc-title">Search</div><div class="wc-desc">Query &amp; export the full results database</div></div>
         </div>
+        <div class="note">&#128336; This setup screen appears <b>once only</b>. Takes about 60 seconds. You can revisit instructions anytime in <b>Settings &rarr; Help</b>.</div>
       </div>
     </div>
 
-    <!-- STEP 1: API KEY -->
-    <div class="step">
-      <div class="step-hdr">
-        <div class="step-num">1</div>
-        <div class="step-title">Enter an LLM API Key &mdash; required for feature extraction</div>
-        <span class="step-badge badge-free">FREE OPTIONS</span>
-      </div>
-      <div class="step-body">
-        <p>Click <b>&#9881; Settings</b> on the home screen and enter at least one key:</p>
-        <div class="opt-row">
-          <div class="opt-icon">&#9889;</div>
-          <div class="opt-body">
-            <div class="opt-name">Groq API Key &mdash; FREE, fastest</div>
-            <div class="opt-desc">No credit card needed. Recommended for first-time users.</div>
-            <div class="opt-link">&#128279; <a href="https://console.groq.com" target="_blank">console.groq.com</a> &rarr; Sign up &rarr; API Keys &rarr; Create</div>
+    <!-- Slide 2: API Key -->
+    <div class="slide hidden" id="slide1">
+      <div class="inner">
+        <div class="slide-icon">&#128273;</div>
+        <div class="slide-title">Step 1 &mdash; Add an LLM API Key</div>
+        <div class="slide-sub">Required for feature extraction. Go to <b>&#9881; Settings</b> on the home screen and paste at least one key.</div>
+        <div class="card">
+          <div class="card-row">
+            <div class="card-icon">&#9889;</div>
+            <div>
+              <div class="card-title">Groq API Key <span class="badge badge-free">FREE &amp; FASTEST</span></div>
+              <div class="card-desc">No credit card needed. Best for first-time users.</div>
+              <div class="card-link">&#128279; console.groq.com &rarr; Sign up &rarr; API Keys &rarr; Create</div>
+            </div>
           </div>
         </div>
-        <div class="divider">— OR —</div>
-        <div class="opt-row">
-          <div class="opt-icon">&#128171;</div>
-          <div class="opt-body">
-            <div class="opt-name">Gemini API Key &mdash; FREE</div>
-            <div class="opt-desc">Google Gemini Flash. Free tier is generous.</div>
-            <div class="opt-link">&#128279; <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> &rarr; Create API key</div>
+        <div class="divider">&#8212; OR &#8212;</div>
+        <div class="card">
+          <div class="card-row">
+            <div class="card-icon">&#128171;</div>
+            <div>
+              <div class="card-title">Gemini API Key <span class="badge badge-free">FREE</span></div>
+              <div class="card-desc">Google Gemini Flash. Free tier is generous.</div>
+              <div class="card-link">&#128279; aistudio.google.com/apikey &rarr; Create API key</div>
+            </div>
           </div>
         </div>
-        <div class="divider">— OR PREMIUM —</div>
-        <div class="opt-row">
-          <div class="opt-icon">&#11088;</div>
-          <div class="opt-body">
-            <div class="opt-name">Vertex AI &mdash; highest accuracy</div>
-            <div class="opt-desc">Uses GCP service account (same JSON as Step 2). Requires Vertex AI API enabled + <b>Vertex AI User</b> role on the service account.</div>
+        <div class="note">&#9888;&#65039; <b>Without an API key</b> the pipeline runs but produces wrong results &mdash; blank Feature Types, 0.50 confidence, noise rows.</div>
+      </div>
+    </div>
+
+    <!-- Slide 3: GCV JSON -->
+    <div class="slide hidden" id="slide2">
+      <div class="inner">
+        <div class="slide-icon">&#9729;&#65039;</div>
+        <div class="slide-title">Step 2 &mdash; Google Cloud Vision JSON <span class="badge badge-opt" style="font-size:.55em;vertical-align:middle">OPTIONAL</span></div>
+        <div class="slide-sub">Enables premium OCR via Google Cloud Vision API. Without it, the app uses EasyOCR (offline, slower, less accurate).</div>
+        <div class="card">
+          <div class="card-title" style="margin-bottom:8px;">How to get the JSON file</div>
+          <div class="card-desc" style="line-height:1.8;">
+            1. Go to <b>console.cloud.google.com</b><br>
+            2. Enable <b>Cloud Vision API</b> (APIs &amp; Services &rarr; Library)<br>
+            3. IAM &amp; Admin &rarr; Service Accounts &rarr; Create &rarr; Keys &rarr; Add Key &rarr; JSON<br>
+            4. File downloads automatically
           </div>
         </div>
-        <div class="note" style="margin-top:8px;">
-          <b>Without an API key</b> the pipeline runs but results will be wrong &mdash; blank Feature Type, 0.50 confidence, noise rows instead of real features.
+        <div class="card">
+          <div class="card-row">
+            <div class="card-icon">&#128196;</div>
+            <div>
+              <div class="card-title">Upload in Settings</div>
+              <div class="card-desc">Click <b>&#9881; Settings &rarr; Google Cloud &rarr; Upload GCP Service Account JSON</b> and select the downloaded file.</div>
+            </div>
+          </div>
+        </div>
+        <div class="note">&#128310; You can skip this step now and add it later from Settings at any time.</div>
+      </div>
+    </div>
+
+    <!-- Slide 4: Ready -->
+    <div class="slide hidden" id="slide3">
+      <div class="inner">
+        <div class="ready-big">&#128640;</div>
+        <div class="slide-title">You&rsquo;re Ready to Go!</div>
+        <div class="slide-sub">Here&rsquo;s how to process your first map.</div>
+        <div class="ready-list">
+          <div class="ready-row"><div class="ri">&#128444;&#65039;</div><div class="rt"><b>Upload</b> &mdash; Drag &amp; drop a JPG / PNG / TIF toposheet onto the home screen (up to 500 MB)</div></div>
+          <div class="ready-row"><div class="ri">&#127917;</div><div class="rt"><b>Choose Model</b> &mdash; Select a processing model from the right panel (Best Quality recommended)</div></div>
+          <div class="ready-row"><div class="ri">&#9654;&#65039;</div><div class="rt"><b>Process</b> &mdash; Click <b>Process Map</b> and watch live progress (5&ndash;30 min depending on map size)</div></div>
+          <div class="ready-row"><div class="ri">&#128202;</div><div class="rt"><b>Search &amp; Export</b> &mdash; Find results in <b>Map Database</b>. Export to CSV or Excel anytime.</div></div>
         </div>
       </div>
     </div>
 
-    <!-- STEP 2: GCV JSON -->
-    <div class="step">
-      <div class="step-hdr">
-        <div class="step-num">2</div>
-        <div class="step-title">Upload Google Cloud Vision JSON &mdash; for best OCR accuracy</div>
-        <span class="step-badge badge-opt">OPTIONAL</span>
-      </div>
-      <div class="step-body">
-        <p>Click <b>&#9881; Settings &rarr; Google Cloud &rarr; Upload GCP Service Account JSON</b> and upload your file.</p>
-        <p><b>How to get the JSON file:</b></p>
-        <p>1. Go to <a href="https://console.cloud.google.com" target="_blank" style="color:#0891b2">console.cloud.google.com</a><br>
-        2. Enable <b>Cloud Vision API</b> (APIs &amp; Services &rarr; Library)<br>
-        3. IAM &amp; Admin &rarr; Service Accounts &rarr; Create &rarr; Keys tab &rarr; Add Key &rarr; JSON<br>
-        4. The JSON file downloads automatically &mdash; upload it in Settings.</p>
-        <div class="note">If you skip this step, the app uses <b>EasyOCR</b> (offline, slower, less accurate).</div>
-      </div>
-    </div>
+  </div><!-- /slides -->
 
-    <!-- STEP 3: PROCESS -->
-    <div class="step">
-      <div class="step-hdr">
-        <div class="step-num">3</div>
-        <div class="step-title">Upload a Toposheet and Process It</div>
-        <span class="step-badge badge-free">YOU'RE READY</span>
-      </div>
-      <div class="step-body">
-        <p>On the home screen, drag &amp; drop or click to upload a scanned toposheet image (JPG, PNG, or TIF up to 500 MB). Select a processing model and click <b>&#9654; Process Map</b>.</p>
-        <p>Processing takes 5&ndash;30 minutes depending on map size and API speed. You can watch live progress on screen.</p>
-        <p>Results appear in <b>&#128202; Map Database</b> where you can search, filter, and export to CSV/Excel.</p>
-      </div>
+  <!-- Navigation footer -->
+  <div class="nav">
+    <button class="btn btn-back invisible" id="btnBack" onclick="go(-1)">&#8592; Back</button>
+    <div class="dots">
+      <div class="dot active" id="dot0"></div>
+      <div class="dot" id="dot1"></div>
+      <div class="dot" id="dot2"></div>
+      <div class="dot" id="dot3"></div>
     </div>
-
-    <div class="footer">
-      <form action="/dismiss_welcome" method="post" style="width:100%;display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
-        <button type="submit" class="start-btn">&#128640; Get Started &rarr;</button>
-        <div class="skip-link">You can re-read setup instructions anytime in <b>Settings &rarr; Help</b></div>
-      </form>
-    </div>
+    <button class="btn btn-next" id="btnNext" onclick="go(1)">Next &rarr;</button>
   </div>
-</div>
+
+</div><!-- /shell -->
+
+<form id="dismissForm" action="/dismiss_welcome" method="post" style="display:none"></form>
+
+<script>
+var cur = 0, total = 4;
+function go(dir) {
+  var next = cur + dir;
+  if (next < 0 || next >= total) return;
+  if (cur === total - 1 && dir === 1) { document.getElementById('dismissForm').submit(); return; }
+  var slides = document.querySelectorAll('.slide');
+  slides[cur].classList.add(dir > 0 ? 'hidden' : 'hidden-left');
+  slides[next].classList.remove('hidden', 'hidden-left');
+  cur = next;
+  update();
+}
+function update() {
+  document.getElementById('stepLabel').textContent = 'Step ' + (cur+1) + ' of ' + total;
+  document.getElementById('progFill').style.width = ((cur+1)/total*100) + '%';
+  for (var i=0; i<total; i++) {
+    var d = document.getElementById('dot'+i);
+    d.className = 'dot' + (i===cur?' active':(i<cur?' done':''));
+  }
+  var back = document.getElementById('btnBack');
+  var next = document.getElementById('btnNext');
+  back.className = 'btn btn-back' + (cur===0?' invisible':'');
+  if (cur === total-1) {
+    next.textContent = '\\u{1F680} Get Started';
+    next.className = 'btn btn-start';
+  } else {
+    next.textContent = 'Next \\u2192';
+    next.className = 'btn btn-next';
+  }
+}
+</script>
 </body>
 </html>"""
 
