@@ -184,6 +184,9 @@ def upload_service_account():
 
 @app.route('/save_env', methods=['POST'])
 def save_env():
+    ref = request.referrer or ''
+    if not ref.startswith('http://127.0.0.1:'):
+        return '', 403
     payload = request.get_json(force=True, silent=True) or {}
     for k, v in payload.items():
         if v:
