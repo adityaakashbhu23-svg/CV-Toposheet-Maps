@@ -31,6 +31,7 @@ ENV_FILE = BASE_DIR / '.env'
 
 RESULTS_DIR = BASE_DIR / 'results'
 MAPS_DIR = BASE_DIR / 'maps'
+FIRST_RUN_FLAG = BASE_DIR / '.welcome_done'
 
 ALLOWED_EXT = {'.jpg', '.jpeg', '.png', '.tif', '.tiff'}
 
@@ -152,6 +153,8 @@ def _write_env(env: dict):
 # ── Routes ────────────────────────────────────────────────────────────────────
 @app.route('/')
 def index():
+    if not FIRST_RUN_FLAG.exists():
+        return redirect('/welcome')
     try:
         feat_count = _feature_count()
     except Exception:
@@ -161,6 +164,20 @@ def index():
     except Exception:
         map_count = 0
     return _landing_html(feat_count, map_count)
+
+
+@app.route('/welcome')
+def welcome():
+    return _WELCOME_TEMPLATE
+
+
+@app.route('/dismiss_welcome', methods=['POST'])
+def dismiss_welcome():
+    try:
+        FIRST_RUN_FLAG.touch()
+    except Exception:
+        pass
+    return redirect('/')
 
 
 @app.route('/upload_service_account', methods=['POST'])
@@ -544,6 +561,179 @@ def delete_maps():
     )
     resp.headers['Access-Control-Allow-Origin'] = '*'
     return resp
+
+
+# ── Welcome / first-run onboarding page ──────────────────────────────────────
+_WELCOME_TEMPLATE = """<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1.0'>
+<title>Welcome to CV-Toposheet</title>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; background:#f0f4f8; display:flex; flex-direction:column; }
+.hdr { background:#0E7490; padding:14px 28px; flex-shrink:0; }
+.hdr-logo { font-size:1.25em; font-weight:700; color:#fff; letter-spacing:-.01em; }
+.hdr-sub  { font-size:0.78em; color:rgba(255,255,255,.75); margin-top:2px; }
+.page { flex:1; overflow-y:auto; padding:24px 16px 40px; display:flex; flex-direction:column; align-items:center; gap:18px; }
+.hero { text-align:center; max-width:640px; }
+.hero h1 { font-size:1.6em; color:#0E7490; font-weight:800; margin-bottom:6px; }
+.hero p  { font-size:0.92em; color:#4a6070; line-height:1.5; }
+.steps { display:flex; flex-direction:column; gap:14px; width:100%; max-width:680px; }
+.step { background:#fff; border-radius:14px; box-shadow:0 2px 14px rgba(14,116,144,.09); border:1.5px solid #d4eaf0; overflow:hidden; }
+.step-hdr { display:flex; align-items:center; gap:14px; padding:14px 18px; background:#f0f9fb; border-bottom:1.5px solid #d4eaf0; cursor:pointer; user-select:none; }
+.step-num { width:34px; height:34px; border-radius:50%; background:#0E7490; color:#fff; font-size:1em; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.step-title { flex:1; font-weight:700; font-size:1em; color:#1e3a4a; }
+.step-badge { font-size:0.72em; font-weight:700; border-radius:4px; padding:2px 8px; }
+.badge-free { background:#dcfce7; color:#166534; }
+.badge-opt  { background:#fef9c3; color:#92400e; }
+.badge-req  { background:#fee2e2; color:#b91c1c; }
+.step-body { padding:14px 18px; font-size:0.87em; color:#334; line-height:1.6; }
+.step-body p { margin-bottom:8px; }
+.step-body p:last-child { margin-bottom:0; }
+.opt-row { display:flex; align-items:flex-start; gap:8px; padding:7px 10px; border-radius:7px; margin-bottom:6px; border:1px solid #e0e7ef; background:#f8fafc; }
+.opt-icon { font-size:1.2em; flex-shrink:0; margin-top:1px; }
+.opt-body { flex:1; }
+.opt-name { font-weight:700; color:#0E7490; font-size:0.95em; }
+.opt-desc { font-size:0.88em; color:#6b8a99; }
+.opt-link { font-size:0.85em; color:#0891b2; }
+.divider { font-size:0.78em; color:#999; text-align:center; margin:4px 0; font-weight:600; }
+.note { background:#fff7ed; border:1px solid #fed7aa; border-radius:7px; padding:8px 12px; font-size:0.83em; color:#92400e; }
+.note b { color:#c2410c; }
+.what-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px; margin-top:4px; }
+.what-card { background:#f0f9fb; border:1px solid #b8dde8; border-radius:8px; padding:8px 10px; }
+.what-card .wc-num { font-size:1.1em; font-weight:800; color:#0E7490; }
+.what-card .wc-title { font-weight:700; font-size:0.88em; color:#1e3a4a; }
+.what-card .wc-desc { font-size:0.78em; color:#6b8a99; margin-top:2px; }
+.footer { width:100%; max-width:680px; display:flex; justify-content:flex-end; }
+.start-btn { background:linear-gradient(135deg,#0e7490,#0891b2); color:#fff; border:none; border-radius:10px; padding:14px 36px; font-size:1.05em; font-weight:800; cursor:pointer; box-shadow:0 3px 14px rgba(14,116,144,.35); letter-spacing:.01em; transition:all .2s; }
+.start-btn:hover { background:linear-gradient(135deg,#0891b2,#06b6d4); box-shadow:0 6px 24px rgba(14,116,144,.5); transform:translateY(-1px); }
+.skip-link { text-align:center; font-size:0.82em; color:#888; }
+.skip-link a { color:#0E7490; cursor:pointer; text-decoration:underline; }
+@media (max-width:600px) {
+  .page { padding:16px 8px 32px; gap:12px; }
+  .hero h1 { font-size:1.3em; }
+  .step-body, .step-hdr { padding:11px 13px; }
+  .what-grid { grid-template-columns:1fr 1fr; }
+  .start-btn { width:100%; padding:14px; }
+  .footer { justify-content:stretch; }
+}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div class="hdr-logo">CV-Toposheet</div>
+  <div class="hdr-sub">AI-Powered Historical Toposheet Digitization</div>
+</div>
+
+<div class="page">
+  <div class="hero">
+    <h1>&#128255; Welcome to CV-Toposheet!</h1>
+    <p>Complete the 3 quick steps below before processing your first map.<br>
+    This screen only appears once &mdash; your settings are saved permanently.</p>
+  </div>
+
+  <!-- WHAT IS THIS APP -->
+  <div class="steps">
+    <div class="step">
+      <div class="step-hdr">
+        <div class="step-num">&#128269;</div>
+        <div class="step-title">What Does This App Do?</div>
+      </div>
+      <div class="step-body">
+        <p>CV-Toposheet automatically extracts and digitizes geographic feature names from scanned historical topographic maps. It converts old paper maps into a searchable database of place names, rivers, roads, villages, elevation markers and more.</p>
+        <div class="what-grid">
+          <div class="what-card"><div class="wc-num">1</div><div class="wc-title">Upload</div><div class="wc-desc">Upload a scanned toposheet (JPG/PNG/TIF)</div></div>
+          <div class="what-card"><div class="wc-num">2</div><div class="wc-title">OCR</div><div class="wc-desc">AI reads all text from every tile</div></div>
+          <div class="what-card"><div class="wc-num">3</div><div class="wc-title">Clean</div><div class="wc-desc">LLM corrects errors &amp; classifies features</div></div>
+          <div class="what-card"><div class="wc-num">4</div><div class="wc-title">Search</div><div class="wc-desc">Query &amp; export the results database</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 1: API KEY -->
+    <div class="step">
+      <div class="step-hdr">
+        <div class="step-num">1</div>
+        <div class="step-title">Enter an LLM API Key &mdash; required for feature extraction</div>
+        <span class="step-badge badge-free">FREE OPTIONS</span>
+      </div>
+      <div class="step-body">
+        <p>Click <b>&#9881; Settings</b> on the home screen and enter at least one key:</p>
+        <div class="opt-row">
+          <div class="opt-icon">&#9889;</div>
+          <div class="opt-body">
+            <div class="opt-name">Groq API Key &mdash; FREE, fastest</div>
+            <div class="opt-desc">No credit card needed. Recommended for first-time users.</div>
+            <div class="opt-link">&#128279; <a href="https://console.groq.com" target="_blank">console.groq.com</a> &rarr; Sign up &rarr; API Keys &rarr; Create</div>
+          </div>
+        </div>
+        <div class="divider">— OR —</div>
+        <div class="opt-row">
+          <div class="opt-icon">&#128171;</div>
+          <div class="opt-body">
+            <div class="opt-name">Gemini API Key &mdash; FREE</div>
+            <div class="opt-desc">Google Gemini Flash. Free tier is generous.</div>
+            <div class="opt-link">&#128279; <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> &rarr; Create API key</div>
+          </div>
+        </div>
+        <div class="divider">— OR PREMIUM —</div>
+        <div class="opt-row">
+          <div class="opt-icon">&#11088;</div>
+          <div class="opt-body">
+            <div class="opt-name">Vertex AI &mdash; highest accuracy</div>
+            <div class="opt-desc">Uses GCP service account (same JSON as Step 2). Requires Vertex AI API enabled + <b>Vertex AI User</b> role on the service account.</div>
+          </div>
+        </div>
+        <div class="note" style="margin-top:8px;">
+          <b>Without an API key</b> the pipeline runs but results will be wrong &mdash; blank Feature Type, 0.50 confidence, noise rows instead of real features.
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2: GCV JSON -->
+    <div class="step">
+      <div class="step-hdr">
+        <div class="step-num">2</div>
+        <div class="step-title">Upload Google Cloud Vision JSON &mdash; for best OCR accuracy</div>
+        <span class="step-badge badge-opt">OPTIONAL</span>
+      </div>
+      <div class="step-body">
+        <p>Click <b>&#9881; Settings &rarr; Google Cloud &rarr; Upload GCP Service Account JSON</b> and upload your file.</p>
+        <p><b>How to get the JSON file:</b></p>
+        <p>1. Go to <a href="https://console.cloud.google.com" target="_blank" style="color:#0891b2">console.cloud.google.com</a><br>
+        2. Enable <b>Cloud Vision API</b> (APIs &amp; Services &rarr; Library)<br>
+        3. IAM &amp; Admin &rarr; Service Accounts &rarr; Create &rarr; Keys tab &rarr; Add Key &rarr; JSON<br>
+        4. The JSON file downloads automatically &mdash; upload it in Settings.</p>
+        <div class="note">If you skip this step, the app uses <b>EasyOCR</b> (offline, slower, less accurate).</div>
+      </div>
+    </div>
+
+    <!-- STEP 3: PROCESS -->
+    <div class="step">
+      <div class="step-hdr">
+        <div class="step-num">3</div>
+        <div class="step-title">Upload a Toposheet and Process It</div>
+        <span class="step-badge badge-free">YOU'RE READY</span>
+      </div>
+      <div class="step-body">
+        <p>On the home screen, drag &amp; drop or click to upload a scanned toposheet image (JPG, PNG, or TIF up to 500 MB). Select a processing model and click <b>&#9654; Process Map</b>.</p>
+        <p>Processing takes 5&ndash;30 minutes depending on map size and API speed. You can watch live progress on screen.</p>
+        <p>Results appear in <b>&#128202; Map Database</b> where you can search, filter, and export to CSV/Excel.</p>
+      </div>
+    </div>
+
+    <div class="footer">
+      <form action="/dismiss_welcome" method="post" style="width:100%;display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+        <button type="submit" class="start-btn">&#128640; Get Started &rarr;</button>
+        <div class="skip-link">You can re-read setup instructions anytime in <b>Settings &rarr; Help</b></div>
+      </form>
+    </div>
+  </div>
+</div>
+</body>
+</html>"""
 
 
 # ── Landing page HTML ─────────────────────────────────────────────────────────

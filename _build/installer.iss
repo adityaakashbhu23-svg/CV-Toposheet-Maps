@@ -108,6 +108,8 @@ Type: filesandordirs; Name: "{app}\results"
 Type: filesandordirs; Name: "{app}\maps"
 Type: filesandordirs; Name: "{app}\logs"
 Type: files;          Name: "{app}\.env"
+Type: files;          Name: "{app}\.welcome_done"
 Type: files;          Name: "{app}\service_account.json"
 Type: files;          Name: "{app}\service_account2.json"
 Type: dirifempty;     Name: "{app}"
+
