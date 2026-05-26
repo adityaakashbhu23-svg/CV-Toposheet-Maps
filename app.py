@@ -587,18 +587,18 @@ html, body { height:100%; overflow:hidden; font-family:'Segoe UI', system-ui, Ar
 
 /* Slide container */
 .slides { flex:1; position:relative; overflow:hidden; }
-.slide { position:absolute; inset:0; display:flex; justify-content:center; align-items:flex-start; padding:28px 20px 20px; overflow:hidden; transition:opacity .25s, transform .25s; }
+.slide { position:absolute; inset:0; display:flex; justify-content:center; align-items:flex-start; padding:14px 20px 10px; overflow:hidden; transition:opacity .25s, transform .25s; }
 .slide.hidden { opacity:0; pointer-events:none; transform:translateX(40px); }
 .slide.hidden-left { opacity:0; pointer-events:none; transform:translateX(-40px); }
-.inner { width:100%; max-width:680px; display:flex; flex-direction:column; gap:14px; }
+.inner { width:100%; max-width:680px; display:flex; flex-direction:column; gap:9px; }
 
 /* Slide title */
-.slide-icon { font-size:2em; text-align:center; }
+.slide-icon { font-size:1.6em; text-align:center; }
 .slide-title { font-size:1.35em; font-weight:800; color:#0E7490; text-align:center; }
 .slide-sub   { font-size:0.88em; color:#4a6070; text-align:center; line-height:1.5; }
 
 /* Cards */
-.card { background:#fff; border-radius:12px; border:1.5px solid #d4eaf0; padding:14px 18px; box-shadow:0 2px 10px rgba(14,116,144,.07); }
+.card { background:#fff; border-radius:12px; border:1.5px solid #d4eaf0; padding:10px 16px; box-shadow:0 2px 10px rgba(14,116,144,.07); }
 .card-row { display:flex; align-items:flex-start; gap:12px; }
 .card-icon { font-size:1.4em; flex-shrink:0; margin-top:2px; }
 .card-title { font-weight:700; color:#0E7490; font-size:0.95em; margin-bottom:2px; }
@@ -608,7 +608,7 @@ html, body { height:100%; overflow:hidden; font-family:'Segoe UI', system-ui, Ar
 .badge-free { background:#dcfce7; color:#166534; }
 .badge-paid { background:#fce7f3; color:#9d174d; }
 .badge-opt  { background:#fef9c3; color:#92400e; }
-.note { background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:9px 13px; font-size:0.83em; color:#92400e; line-height:1.5; }
+.note { background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:7px 12px; font-size:0.82em; color:#92400e; line-height:1.4; }
 .what-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .wc { background:#f0f9fb; border:1px solid #b8dde8; border-radius:8px; padding:10px 12px; }
 .wc-num   { font-size:1.1em; font-weight:800; color:#0E7490; }
@@ -1755,6 +1755,12 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
         <div class="help-card-title">&#128171; Gemini API Key <span class="help-badge-free">FREE</span></div>
         <div class="help-card-desc">Google Gemini Flash. Free tier is generous.</div>
         <div class="help-card-link">&#128279; aistudio.google.com/apikey &rarr; Create API key</div>
+      </div>
+      <div class="help-divider">or</div>
+      <div class="help-card">
+        <div class="help-card-title">&#128176; Other API Keys <span style="display:inline-block;font-size:0.7em;font-weight:700;border-radius:4px;padding:2px 7px;margin-left:6px;vertical-align:middle;background:#fce7f3;color:#9d174d;">PAID</span></div>
+        <div class="help-card-desc">Claude (Anthropic), Grok (xAI), OpenAI, and more. Add via <b>&#9881; Settings</b> after setup.</div>
+        <div class="help-card-link">&#128279; anthropic.com &nbsp;|&nbsp; x.ai/api &nbsp;|&nbsp; platform.openai.com</div>
       </div>
       <div class="help-note">&#9888;&#65039; <b>Without an API key</b> the pipeline runs but produces wrong results: blank Feature Types, 0.50 confidence, noise rows.</div>
 
