@@ -1,244 +1,192 @@
-# CV-Toposheet - Historical Map Digitization Pipeline
+# CV-Toposheet
 
+Desktop app for extracting place names and geographic features from historical topographic maps using OCR, computer vision, and LLM-assisted post-processing.
 
+![Status](https://img.shields.io/badge/status-active-brightgreen)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-blue)
+![Interface](app_icon.png)
 
-Automated extraction of place names and geographic features from Survey of India (and other) topographical maps using Computer Vision, OCR, and multi-LLM post-processing.
+## Overview
 
+CV-Toposheet is designed for researchers, historians, archivists, and heritage professionals working with scanned maps. It turns large raster toposheets into a searchable database of extracted features with model-assisted cleanup and export tools.
 
+Main workflow:
 
-![Pipeline: Upload map → OCR → LLM cleaning → Searchable database](https://img.shields.io/badge/status-fully%20operational-brightgreen)
+1. Upload one or more scanned maps in JPG, PNG, or TIF format.
+2. Tile the map without downscaling the original image.
+3. Run OCR using Google Cloud Vision or local fallback engines.
+4. Clean and classify extracted text with the selected LLM provider.
+5. Assemble results into a searchable local database.
+6. Review, filter, compare, and export extracted features.
 
+Supported map families include Survey of India, UK Ordnance Survey, USGS, and similar historical sheet-based map layouts.
 
+## Screenshots And Assets
 
----
+Repository visuals:
 
+![App poster](_build/poster_720x1080.png)
 
+Store and build assets are included in the repository for packaging under [_build/Assets](_build/Assets).
 
-## What it does
+## Key Features
 
+- Desktop-first workflow with packaged EXE, MSIX, and macOS build support.
+- Multiple model choices including Vertex AI, Groq, Gemini, OpenAI, Claude, Grok, and offline OCR mode.
+- Searchable local database for extracted map features.
+- Excel and table export support.
+- Guided onboarding for API keys and Google Cloud setup.
+- In-app AI content reporting flow for user feedback and moderation review.
 
+## Downloads
 
-Upload a scanned topographic map (JPG/PNG/TIF, up to 500 MB) and the pipeline:
+For Windows, download the packaged installer from [Releases](../../releases):
 
+- `CVToposheet_Setup.exe`
+- `CVToposheet_*.msix`
 
+The Windows installer is self-contained and does not require a separate Python installation.
 
-1. **Tiles** the map into 1024x1024 px patches (preserving full resolution)
-
-2. **OCR** - Google Cloud Vision (primary), EasyOCR or Tesseract (fallback)
-
-3. **LLM cleaning** - removes noise, fixes spelling, classifies features (settlement / river / mountain / landmark)
-
-4. **Grid detection** - assigns lat/lon coordinates from the map's alphanumeric grid
-
-5. **Web interface** - search, filter, and export all extracted place names as a table
-
-
-
-Supports Survey of India sheets, UK OS, USGS, German and French.
-
-
-
----
-
-
-
-## Installation (Windows - no Python needed)
-
-
-
-Download **CVToposheet_Setup.exe** from [Releases](../../releases) and run it.  
-
-The installer sets up a self-contained app - no Python or dependencies required.
-
-
-
-After installing, follow the **API Keys Setup Guide** in the Start Menu to add your own keys.
-
-
-
----
-
-
-
-## Running from source
-
-
+## Quick Start From Source
 
 ### Requirements
 
-
-
 - Python 3.11+
-
-- All packages in `requirements.txt`
-
-
+- Packages from `requirements.txt`
 
 ```bash
-
 git clone https://github.com/adityaakashbhu23-svg/CV-Toposheet-Maps.git
-
 cd CV-Toposheet-Maps
-
 pip install -r requirements.txt
-
 ```
 
+### Required Configuration
 
-
-### Configuration (required before first run)
-
-
-
-**Step 1 - Copy the env template:**
-
-
+1. Copy the environment template:
 
 ```bash
-
 cp .env.example .env
-
 ```
 
+2. Add at least one LLM API key. Free options are supported:
 
-Open `.env` and fill in at least one LLM API key (Groq and Gemini are free):
+| Key | Provider | Cost |
+| --- | --- | --- |
+| `GROQ_API_KEY` | [Groq](https://console.groq.com) | Free tier available |
+| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) | Free tier available |
+| `OPENAI_API_KEY` | [OpenAI](https://platform.openai.com/api-keys) | Paid |
+| `CLAUDE_API_KEY` | [Anthropic](https://console.anthropic.com) | Paid |
+| `GROK_API_KEY` | [xAI](https://console.x.ai) | Paid |
 
+3. Add a Google Cloud Vision service account JSON for high-quality OCR.
 
+Recommended setup:
 
-| Key | Where to get it | Free? |
+1. Create a Google Cloud project.
+2. Enable `Cloud Vision API`.
+3. Create a service account.
+4. Generate a JSON key.
+5. Upload or save it as `service_account.json`.
 
-| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com) | ✅ Free |
+Without Google Cloud Vision, the app falls back to EasyOCR, which is slower and less reliable on many historical maps.
 
-| `GEMINI_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | ✅ Free |
+4. Optional: enable Vertex AI for the highest-quality LLM path.
 
-| `OPENAI_API_KEY` | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) | Paid |
-
-| `CLAUDE_API_KEY` | [console.anthropic.com](https://console.anthropic.com) | Paid |
-
-| `GROK_API_KEY` | [console.x.ai](https://console.x.ai) | Paid |
-
-
-
-**Step 2 - Google Cloud Vision service account JSON (strongly recommended for good results):**
-
-
-> ⚠️ **Without this file, OCR quality will be significantly lower.** The app falls back to EasyOCR which misses many place names, especially on older or faded maps. For any serious use, the GCV service account JSON is essential.
-
-To set it up:
-
-1. Create a [Google Cloud project](https://console.cloud.google.com)
-
-2. Enable the **Cloud Vision API**
-
-3. Go to **IAM & Admin → Service Accounts** → Create a service account
-
-4. Under the service account → **Keys → Add Key → JSON** → download the file
-
-5. Save the downloaded JSON file as `service_account.json` in the project root
-
-Google Cloud Vision offers a **free tier of 1,000 OCR requests/month** - more than enough for most research use.
-
-
-**Step 3 - Vertex AI - optional (highest LLM accuracy):**
-
-If you want to use Vertex AI (Gemini via Google Cloud):
-
-1. Enable **Vertex AI API** in your Google Cloud project
-
-2. Grant your service account the **Vertex AI User** role
-
-3. Set `LLM_PROVIDER=vertex` and `VERTEX_PROJECT=your-project-id` in `.env`
-
-### Running the app
-
+### Run The App
 
 ```bash
-
 python app.py
-
 ```
 
-Open [http://127.0.0.1:5000](http://127.0.0.1:5000) in your browser
+Then open [http://127.0.0.1:5000](http://127.0.0.1:5000).
 
-## Files NOT included (add your own)
+## Privacy And Data Handling
 
+CV-Toposheet is a local desktop application. It does not include analytics, advertising, or background tracking.
 
-| File | Purpose |
+Relevant links:
 
-| `.env` | Your API keys - copy from `.env.example` |
+- [Privacy Policy](privacy-policy.md)
+- [Repository Issues](https://github.com/adityaakashbhu23-svg/CV-Toposheet-Maps/issues)
 
-| `service_account.json` | Google Cloud Vision + Vertex AI credentials |
+Data handling summary:
 
+- Map processing results are stored locally.
+- API keys are stored locally by the user.
+- Only user-configured third-party OCR or LLM services are contacted.
+- Users can export their own results at any time.
 
-These are excluded from the repository for security. **Never commit them to git.**
+## Support And Reporting
 
+If you need support or want to report a problem:
 
-## Project structure
+- Open a repository issue: [GitHub Issues](https://github.com/adityaakashbhu23-svg/CV-Toposheet-Maps/issues)
+- Use the in-app `Report AI Content` action to report inappropriate or unsafe generated content.
 
-app.py                  Flask web server + UI
+The in-app report flow creates a reference ID and directs the user to the publisher issue page for review.
 
-config.py               Loads all settings from .env
+## Repository Structure
 
-1_tile_maps.py          Phase 1 - tiling engine
+Core files and folders:
 
-2_ocr_extraction.py     Phase 2 - OCR (GCV / EasyOCR / Tesseract)
+| Path | Purpose |
+| --- | --- |
+| `app.py` | Flask app and desktop UI HTML templates |
+| `config.py` | Loads local environment configuration |
+| `1_tile_maps.py` | Phase 1 tiling |
+| `2_ocr_extraction.py` | Phase 2 OCR |
+| `3_grid_detection.py` | Phase 3 grid detection |
+| `4_llm_cleaning.py` | Phase 4 LLM cleanup and classification |
+| `5_database_assembly.py` | Phase 5 database generation |
+| `6_query_interface.py` | Query and export layer |
+| `utils/` | Shared OCR, LLM, and helper utilities |
+| `_build/` | Packaging assets, specs, and installer files |
+| `maps/` | Input map files |
+| `results/` | Generated outputs |
 
-3_grid_detection.py     Phase 3 - grid coordinate detection
+Excluded from version control:
 
-4_llm_cleaning.py       Phase 4 - LLM post-processing
+- `.env`
+- `service_account.json`
+- user-generated outputs and build artifacts
 
-5_database_assembly.py  Phase 5 - builds searchable database
+## Packaging
 
-6_query_interface.py    Phase 6 - search and export
+This repository includes packaging support for:
 
-utils/                  Shared utilities
-
-maps/                   Place your input map images here
-
-results/                Output database (auto-generated)
-
-.env.example            API key template - copy to .env
-
+- Windows EXE via PyInstaller
+- Windows MSIX packaging
+- macOS app and DMG via GitHub Actions on macOS runners
 
 ## License
 
-See [LICENSE.txt](LICENSE.txt)
+See [LICENSE](LICENSE).
 
-## About the Developer
+## About The Developer
 
 **Aditya Akash**  
-
 MPhil in Digital Humanities  
-
 University of Cambridge
 
-Heritage professional specialising in heritage documentation and geospatial analysis. This project applies AI-driven computer vision to the digitization of historical toposheets and cartographic records.
+This project applies AI-assisted computer vision and OCR to the digitization of historical toposheets and related cartographic materials.
 
-## Funding & Acknowledgements
+## Funding And Acknowledgements
 
 This software was developed as part of an MPhil research project in Digital Humanities at the University of Cambridge.
 
-Funded by:
+Supported by:
 
-- **Commonwealth Scholarship Commission (CSC)**
+- Commonwealth Scholarship Commission
+- Cambridge Trust
 
-- **Cambridge Trust (CT Trust)**
+## Accuracy And Disclaimer
 
-The developer gratefully acknowledges the support of these organisations in making this research possible.
+This tool does not guarantee perfect extraction accuracy. OCR and LLM outputs are probabilistic and should be reviewed against the original map.
 
----
+Important limitations:
 
-## Accuracy & Disclaimer
-
-**This tool does not claim 100% accuracy.** OCR and LLM outputs are probabilistic - results will always contain some errors, missed names, or misclassifications depending on map quality, scan resolution, handwriting style, and the API tier used.
-
-- Older or faded maps will produce more errors than clean modern scans
-
-- Place names in non-English scripts may not extract correctly
-
-- Always cross-check extracted features against the original source map before using in any research, publication, or GIS project
-
-- Treat all outputs as a first-draft aid, not a definitive record
-
-Aditya Akash, the University of Cambridge, the Commonwealth Scholarship Commission, and CT Trust are not liable for any data loss, damage, or consequences arising from the use of this software.
+- Older, faded, or low-resolution maps will produce more OCR errors.
+- Non-English scripts may require manual review.
+- Feature classification may vary by model and API tier.
+- Outputs should be treated as research assistance, not a final authoritative record.
 

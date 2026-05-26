@@ -31,7 +31,11 @@ ENV_FILE = BASE_DIR / '.env'
 
 RESULTS_DIR = BASE_DIR / 'results'
 MAPS_DIR = BASE_DIR / 'maps'
+LOGS_DIR = BASE_DIR / 'logs'
 FIRST_RUN_FLAG = BASE_DIR / '.welcome_done'
+AI_REPORTS_FILE = LOGS_DIR / 'ai_content_reports.jsonl'
+SUPPORT_ISSUES_URL = 'https://github.com/adityaakashbhu23-svg/CV-Toposheet-Maps/issues/new'
+SUPPORT_EMAIL = 'cvtoposheet@outlook.com'
 
 ALLOWED_EXT = {'.jpg', '.jpeg', '.png', '.tif', '.tiff'}
 
@@ -223,6 +227,78 @@ def save_env():
     except Exception:
         pass
     return json.dumps({'ok': True})
+
+
+@app.route('/report_ai_content', methods=['POST'])
+def report_ai_content():
+  ref = request.referrer or ''
+  if not ref.startswith('http://127.0.0.1:'):
+    return '', 403
+
+  payload = request.get_json(force=True, silent=True) or {}
+  report_id = f"AIR-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
+
+  def _clean_str(key: str, limit: int = 4000) -> str:
+    return str(payload.get(key, '')).strip()[:limit]
+
+  model = _clean_str('model', 80)
+  category = _clean_str('category', 120)
+  snippet = _clean_str('snippet', 2000)
+  details = _clean_str('details', 4000)
+  contact = _clean_str('contact', 200)
+  files = payload.get('files') or []
+  if not isinstance(files, list):
+    files = []
+  files = [str(item).strip()[:260] for item in files[:20] if str(item).strip()]
+
+  if not details:
+    return json.dumps({'ok': False, 'error': 'Please describe the issue.'}), 400
+
+  LOGS_DIR.mkdir(exist_ok=True)
+  record = {
+    'report_id': report_id,
+    'created_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+    'category': category or 'inappropriate-output',
+    'model': model,
+    'files': files,
+    'snippet': snippet,
+    'details': details,
+    'contact': contact,
+  }
+  with open(AI_REPORTS_FILE, 'a', encoding='utf-8') as handle:
+    handle.write(json.dumps(record, ensure_ascii=True) + '\n')
+
+  issue_title = url_quote(f'AI content report: {report_id}')
+  issue_body = url_quote(
+    f"Report ID: {report_id}\n"
+    f"Category: {record['category']}\n"
+    f"Model: {model or 'not provided'}\n"
+    f"Files: {', '.join(files) if files else 'not provided'}\n\n"
+    f"Snippet:\n{snippet or 'not provided'}\n\n"
+    f"Details:\n{details}\n\n"
+    f"Contact: {contact or 'not provided'}\n"
+  )
+  issue_url = f'{SUPPORT_ISSUES_URL}?title={issue_title}&body={issue_body}'
+  report_text = (
+    f"Report ID: {report_id}\n"
+    f"Category: {record['category']}\n"
+    f"Model: {model or 'not provided'}\n"
+    f"Files: {', '.join(files) if files else 'not provided'}\n\n"
+    f"Snippet:\n{snippet or 'not provided'}\n\n"
+    f"Details:\n{details}\n\n"
+    f"Contact: {contact or 'not provided'}"
+  )
+  email_subject = url_quote(f'CVToposheet AI content report: {report_id}')
+  email_body = url_quote(report_text)
+  email_url = f'mailto:{SUPPORT_EMAIL}?subject={email_subject}&body={email_body}'
+  return json.dumps({
+    'ok': True,
+    'report_id': report_id,
+    'issue_url': issue_url,
+    'report_text': report_text,
+    'support_email': SUPPORT_EMAIL,
+    'email_url': email_url,
+  })
 
 
 @app.route('/upload', methods=['POST'])
@@ -834,6 +910,8 @@ body { min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; b
 .hdr-logo span { color:#fff; }
 .hdr-sub  { font-size:0.78em; color:rgba(255,255,255,.75); margin-top:2px; }
 .hdr-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.report-btn { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); color:#fff; border-radius:7px; padding:0 16px; height:36px; font-size:0.85em; font-weight:700; cursor:pointer; transition:background .2s; display:inline-flex; align-items:center; gap:5px; box-sizing:border-box; }
+.report-btn:hover { background:rgba(255,255,255,.25); }
 .settings-btn { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); color:#fff; border-radius:7px; padding:0 16px; height:36px; font-size:0.85em; font-weight:700; cursor:pointer; transition:background .2s; display:inline-flex; align-items:center; gap:5px; box-sizing:border-box; }
 .settings-btn:hover { background:rgba(255,255,255,.25); }
 #uploadForm { flex:1 0 auto; display:flex; flex-direction:column; }
@@ -922,6 +1000,23 @@ body { min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; b
 .badge-optional { background:#f0fdf4; color:#166534; }
 .badge-claude  { background:#fae8ff; color:#86198f; }
 .badge-grok    { background:#fff7ed; color:#c2410c; }
+.report-help { font-size:0.8em; color:#5a7a8a; line-height:1.55; margin-bottom:12px; }
+.report-grid { display:flex; flex-direction:column; gap:10px; }
+.report-field { display:flex; flex-direction:column; gap:5px; }
+.report-field label { font-size:0.82em; color:#334; font-weight:600; }
+.report-field input, .report-field select, .report-field textarea { width:100%; border:1px solid #cdd; border-radius:6px; padding:8px 10px; font-size:0.82em; font-family:inherit; }
+.report-field textarea { min-height:90px; resize:vertical; }
+.report-readonly { background:#f8fafc; color:#5a7a8a; }
+.report-status { display:none; font-size:0.82em; line-height:1.45; margin-right:auto; max-width:60%; }
+.report-status.ok { color:#166534; display:block; }
+.report-status.err { color:#b91c1c; display:block; }
+.report-link { color:#0E7490; font-weight:700; text-decoration:underline; }
+.report-actions { display:none; gap:10px; margin-right:auto; align-items:center; flex-wrap:wrap; }
+.report-actions.open { display:flex; }
+.report-action-btn { border:none; border-radius:6px; padding:8px 12px; font-size:0.82em; font-weight:700; cursor:pointer; }
+.report-action-copy { background:#e0f2f7; color:#0E7490; }
+.report-action-copy:hover { background:#cbe8f1; }
+.report-action-link { color:#0E7490; text-decoration:underline; font-size:0.82em; font-weight:700; }
 /* PIN Lock */
 .pin-overlay { display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,.55); align-items:center; justify-content:center; z-index:2000; }
 .pin-overlay.open { display:flex; }
@@ -983,7 +1078,7 @@ body { min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; b
 @media (max-width:768px) {
   .hdr { padding:10px 14px; }
   .hdr-sub { display:none; }
-  .settings-btn, .db-banner-btn, .kill-banner-btn { height:32px; font-size:0.78em; }
+  .settings-btn, .db-banner-btn, .kill-banner-btn, .report-btn { height:32px; font-size:0.78em; }
   .body { padding:8px; gap:10px; }
   .drop-zone { min-height:180px; padding:12px 10px; }
   .dz-icon-row { gap:10px; }
@@ -994,6 +1089,7 @@ body { min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; b
   .hdr-logo { font-size:0.95em; }
   .db-banner-btn .db-label { display:none; }
   .kill-banner-btn .kill-label { display:none; }
+  .report-btn .report-label { display:none; }
   .settings-btn .settings-label { display:none; }
   .body { padding:6px; gap:8px; }
   .drop-zone { min-height:150px; padding:10px 8px; }
@@ -1015,6 +1111,7 @@ body { min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; b
   <div class="hdr-actions">
     <a href="/results" class="db-banner-btn" title="View all processed maps in the database">&#128202;&nbsp;<span class="db-label">Map Database</span></a>
     <button class="kill-banner-btn" id="killBannerBtn" onclick="killRunningJob()" title="Kill any running job and restart the server">&#9632;<span class="kill-label"> Restart Server</span></button>
+    <button class="report-btn" onclick="openReportModal()" title="Report inappropriate or unsafe AI-generated content">&#9888;&#xFE0E;<span class="report-label"> Report AI Content</span></button>
     <button class="settings-btn" onclick="openSettings()">&#9881;&#xFE0E;<span class="settings-label"> Settings</span></button>
   </div>
 </div>
@@ -1320,6 +1417,101 @@ function closeHelp() {
   document.getElementById('helpOverlay').classList.remove('open');
 }
 
+function openReportModal() {
+  const model = document.getElementById('modelInput');
+  const files = (_fileList || []).map(f => f.name).join(', ');
+  window._lastReportPayload = null;
+  document.getElementById('report_model').value = model ? model.value : '';
+  document.getElementById('report_files').value = files;
+  document.getElementById('report_category').value = 'inappropriate-output';
+  document.getElementById('report_snippet').value = '';
+  document.getElementById('report_details').value = '';
+  document.getElementById('report_contact').value = '';
+  const status = document.getElementById('reportStatus');
+  status.className = 'report-status';
+  status.style.display = 'none';
+  status.innerHTML = '';
+  const actions = document.getElementById('reportActions');
+  actions.classList.remove('open');
+  document.getElementById('reportIssueLink').href = '#';
+  document.getElementById('reportEmailLink').href = '#';
+  document.getElementById('reportModal').classList.add('open');
+}
+
+function closeReportModal() {
+  document.getElementById('reportModal').classList.remove('open');
+}
+
+function submitAIReport() {
+  const status = document.getElementById('reportStatus');
+  const submitBtn = document.getElementById('reportSubmitBtn');
+  const payload = {
+    category: document.getElementById('report_category').value,
+    model: document.getElementById('report_model').value,
+    files: document.getElementById('report_files').value.split(',').map(s => s.trim()).filter(Boolean),
+    snippet: document.getElementById('report_snippet').value.trim(),
+    details: document.getElementById('report_details').value.trim(),
+    contact: document.getElementById('report_contact').value.trim(),
+  };
+  if (!payload.details) {
+    status.className = 'report-status err';
+    status.style.display = 'block';
+    status.textContent = 'Please describe the issue before submitting.';
+    return;
+  }
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Submitting...';
+  fetch('/report_ai_content', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  })
+    .then(async r => ({ ok: r.ok, data: await r.json() }))
+    .then(({ ok, data }) => {
+      if (!ok || !data.ok) throw new Error((data && data.error) || 'Submission failed.');
+      window._lastReportPayload = data;
+      status.className = 'report-status ok';
+      status.style.display = 'block';
+      status.innerHTML = 'Saved with reference <b>' + data.report_id + '</b>. Choose any reporting channel below.';
+      const actions = document.getElementById('reportActions');
+      actions.classList.add('open');
+      document.getElementById('reportIssueLink').href = data.issue_url;
+      document.getElementById('reportEmailLink').href = data.email_url;
+      document.getElementById('reportEmailLink').textContent = 'Send Email (' + data.support_email + ')';
+    })
+    .catch(err => {
+      status.className = 'report-status err';
+      status.style.display = 'block';
+      status.textContent = err.message || 'Submission failed.';
+    })
+    .finally(() => {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Report';
+    });
+}
+
+function copyAIReport() {
+  const status = document.getElementById('reportStatus');
+  const data = window._lastReportPayload;
+  if (!data || !data.report_text) {
+    status.className = 'report-status err';
+    status.style.display = 'block';
+    status.textContent = 'Submit a report first, then copy.';
+    return;
+  }
+  navigator.clipboard.writeText(data.report_text)
+    .then(() => {
+      status.className = 'report-status ok';
+      status.style.display = 'block';
+      status.textContent = 'Report copied. You can paste it into email or support chat.';
+    })
+    .catch(() => {
+      status.className = 'report-status err';
+      status.style.display = 'block';
+      status.textContent = 'Copy failed. Please use the email or GitHub link.';
+    });
+}
+
 function saveSettings() {
   const payload = {};
   document.querySelectorAll('.key-row-input input').forEach(inp => {
@@ -1554,6 +1746,60 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
   </div>
 </div>
 
+  <!-- AI Report Modal -->
+  <div class="modal-overlay" id="reportModal" onclick="if(event.target===this)closeReportModal()">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>&#9888; Report AI Content</h2>
+        <button class="modal-close" onclick="closeReportModal()">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <p class="report-help">Use this form to report inappropriate, unsafe, or clearly incorrect AI-generated content. The app saves a local report with a reference ID and gives you a direct GitHub issue link for the publisher.</p>
+        <div class="report-grid">
+          <div class="report-field">
+            <label>Issue type</label>
+            <select id="report_category">
+              <option value="inappropriate-output">Inappropriate or unsafe output</option>
+              <option value="hallucination">Incorrect or hallucinated content</option>
+              <option value="bias">Biased or offensive wording</option>
+              <option value="other">Other AI content concern</option>
+            </select>
+          </div>
+          <div class="report-field">
+            <label>Selected model</label>
+            <input type="text" id="report_model" class="report-readonly" readonly>
+          </div>
+          <div class="report-field">
+            <label>Map file(s)</label>
+            <input type="text" id="report_files" class="report-readonly" readonly>
+          </div>
+          <div class="report-field">
+            <label>Problematic output snippet</label>
+            <textarea id="report_snippet" placeholder="Paste the AI-generated text or result that caused concern."></textarea>
+          </div>
+          <div class="report-field">
+            <label>What went wrong</label>
+            <textarea id="report_details" placeholder="Describe what the AI generated and why it should be reviewed."></textarea>
+          </div>
+          <div class="report-field">
+            <label>Contact (optional)</label>
+            <input type="text" id="report_contact" placeholder="Email or other contact info">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span class="report-status" id="reportStatus"></span>
+        <div class="report-actions" id="reportActions">
+          <button class="report-action-btn report-action-copy" type="button" onclick="copyAIReport()">Copy Report</button>
+          <a class="report-action-link" id="reportIssueLink" href="#" target="_blank" rel="noopener">Open GitHub issue</a>
+          <a class="report-action-link" id="reportEmailLink" href="#">Send Email</a>
+        </div>
+        <button class="btn-cancel" onclick="closeReportModal()">Cancel</button>
+        <button class="btn-save" id="reportSubmitBtn" onclick="submitAIReport()">Submit Report</button>
+      </div>
+    </div>
+  </div>
+
 <!-- Settings Modal -->
 <div class="modal-overlay" id="settingsModal">
   <div class="modal-card">
@@ -1780,6 +2026,12 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
         <div class="help-card-desc">Click <b>&#9881; Settings &rarr; Google Cloud &rarr; Upload GCP Service Account JSON</b> and select the downloaded file.</div>
       </div>
       <div class="help-note" style="margin-top:8px;background:#f0fdf4;border-color:#86efac;color:#166534;">&#11088; For even better results, also enable <b>Vertex AI API</b> in Google Cloud Console (APIs &amp; Services &rarr; Library &rarr; search &ldquo;Vertex AI&rdquo; &rarr; Enable).</div>
+
+      <div class="help-sep"></div>
+
+      <!-- AI reporting -->
+      <div class="help-sec-title">&#9888;&#65039; Report AI-Generated Content</div>
+      <p style="font-size:0.83em;color:#4a6070;line-height:1.5;margin-bottom:10px;">If the AI generates inappropriate, unsafe, or clearly incorrect content, click <b>&#9888; Report AI Content</b> in the top bar. The app stores a report reference and opens a publisher issue link so the content can be reviewed.</p>
 
       <div class="help-sep"></div>
 
