@@ -431,6 +431,11 @@ def process(filename):
 
 @app.route('/get_env')
 def get_env():
+    # Only allow requests originating from the app's own pages (pywebview or localhost).
+    # Direct browser navigation (typing the URL) sends no Referer — block it.
+    ref = request.referrer or ''
+    if not ref.startswith('http://127.0.0.1:'):
+        return '', 403
     keys = ['GROQ_API_KEY', 'GEMINI_API_KEY', 'GEMINI_API_KEY_2', 'OPENAI_API_KEY',
             'CLAUDE_API_KEY', 'GROK_API_KEY', 'GOOGLE_API_KEY',
             'GOOGLE_APPLICATION_CREDENTIALS', 'VERTEX_PROJECT', 'VERTEX_LOCATION', 'VERTEX_MODEL']
