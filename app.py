@@ -606,6 +606,7 @@ html, body { height:100%; overflow:hidden; font-family:'Segoe UI', system-ui, Ar
 .card-link  { font-size:0.83em; color:#0891b2; margin-top:3px; }
 .badge { display:inline-block; font-size:0.7em; font-weight:700; border-radius:4px; padding:2px 7px; margin-left:6px; vertical-align:middle; }
 .badge-free { background:#dcfce7; color:#166534; }
+.badge-paid { background:#fce7f3; color:#9d174d; }
 .badge-opt  { background:#fef9c3; color:#92400e; }
 .note { background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:9px 13px; font-size:0.83em; color:#92400e; line-height:1.5; }
 .what-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
@@ -696,6 +697,17 @@ html, body { height:100%; overflow:hidden; font-family:'Segoe UI', system-ui, Ar
             </div>
           </div>
         </div>
+        <div class="divider">or</div>
+        <div class="card">
+          <div class="card-row">
+            <div class="card-icon">&#128176;</div>
+            <div>
+              <div class="card-title">Other API Keys <span class="badge badge-paid">PAID</span></div>
+              <div class="card-desc">Claude (Anthropic), Grok (xAI), OpenAI, and more. Add via <b>&#9881; Settings</b> after setup.</div>
+              <div class="card-link">&#128279; anthropic.com &nbsp;|&nbsp; x.ai/api &nbsp;|&nbsp; platform.openai.com</div>
+            </div>
+          </div>
+        </div>
         <div class="note">&#9888;&#65039; <b>Without an API key</b> the pipeline runs but produces wrong results: blank Feature Types, 0.50 confidence, noise rows.</div>
       </div>
     </div>
@@ -766,8 +778,8 @@ html, body { height:100%; overflow:hidden; font-family:'Segoe UI', system-ui, Ar
 var cur = 0, total = 4;
 function go(dir) {
   var next = cur + dir;
-  if (next < 0 || next >= total) return;
   if (cur === total - 1 && dir === 1) { document.getElementById('dismissForm').submit(); return; }
+  if (next < 0 || next >= total) return;
   var slides = document.querySelectorAll('.slide');
   slides[cur].classList.add(dir > 0 ? 'hidden' : 'hidden-left');
   slides[next].classList.remove('hidden', 'hidden-left');
