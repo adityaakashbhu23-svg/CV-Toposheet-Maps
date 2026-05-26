@@ -37,7 +37,6 @@ jobs:
           brew install create-dmg
           create-dmg \
             --volname "CV-Toposheet" \
-            --volicon "_build/app_icon.ico" \
             --window-pos 200 120 \
             --window-size 800 400 \
             --icon-size 100 \
