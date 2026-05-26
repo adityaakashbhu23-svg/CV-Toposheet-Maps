@@ -37,17 +37,24 @@ def build_database() -> None:
         init_db(str(DB_PATH))
         return
 
-    with open(LLM_PATH, encoding='utf-8') as f:
-        llm_data = json.load(f)
+    try:
+        with open(LLM_PATH, encoding='utf-8') as f:
+            llm_data = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        print(f'[Phase 5] ERROR: Could not read LLM data ({e}). Aborting.')
+        return
 
     # Load cell coordinates from grid detection if available
     cell_coords_all: dict = {}   # map_name → {grid_ref → {lat_min,...}}
     grid_data: dict = {}         # map_name → full grid entry (for ocr_map_number etc.)
     if GRID_PATH.exists():
-        with open(GRID_PATH, encoding='utf-8') as f:
-            grid_data = json.load(f)
-        for mn, gd in grid_data.items():
-            cell_coords_all[mn] = gd.get('cell_coords', {})
+        try:
+            with open(GRID_PATH, encoding='utf-8') as f:
+                grid_data = json.load(f)
+            for mn, gd in grid_data.items():
+                cell_coords_all[mn] = gd.get('cell_coords', {})
+        except (json.JSONDecodeError, OSError) as e:
+            print(f'[Phase 5] WARNING: Could not read grid data ({e}). Continuing without cell coords.')
 
     # Initialize (or reset) database
     if DB_PATH.exists():
