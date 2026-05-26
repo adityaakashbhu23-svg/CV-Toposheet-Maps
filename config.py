@@ -45,21 +45,24 @@ GEMINI_MODEL    = os.getenv('GEMINI_MODEL',  'gemini-2.5-flash')
 CLAUDE_MODEL    = os.getenv('CLAUDE_MODEL',  'claude-haiku-4-5')
 GROQ_MODEL      = os.getenv('GROQ_MODEL',    'llama-3.3-70b-versatile')
 
-# Vertex AI (Google Cloud — uses service_account2.json, billed to GCP credit)
+# Vertex AI (Google Cloud — uses service_account.json, billed to GCP credit)
 VERTEX_PROJECT  = os.getenv('VERTEX_PROJECT',  'cv-toposheet')
 VERTEX_LOCATION = os.getenv('VERTEX_LOCATION', 'us-central1')
 VERTEX_MODEL    = os.getenv('VERTEX_MODEL',    'gemini-2.5-flash')
 
 # ── Google Cloud Vision ──────────────────────────────────────
-# Priority: service_account2.json → Service_account_Backup.json
+# Priority: service_account.json → service_account2.json → Service_account_Backup.json
 _gcv_creds_rel  = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', '')
 if _gcv_creds_rel:
     _gcv_creds_path = _DATA_DIR / _gcv_creds_rel
 else:
-    _primary_path  = _DATA_DIR / 'service_account2.json'
+    _primary_path  = _DATA_DIR / 'service_account.json'
+    _legacy_path   = _DATA_DIR / 'service_account2.json'
     _backup_path   = _DATA_DIR / 'Service_account_Backup.json'
     if _primary_path.exists():
         _gcv_creds_path = _primary_path
+    elif _legacy_path.exists():
+        _gcv_creds_path = _legacy_path
     elif _backup_path.exists():
         _gcv_creds_path = _backup_path
     else:
@@ -68,7 +71,7 @@ if _gcv_creds_path.exists():
     os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(_gcv_creds_path)
     _which = _gcv_creds_path.name
     if 'backup' in _which.lower() or 'Backup' in _which:
-        print(f'[Config/GCV] WARN: Primary service_account2.json not found - using BACKUP: {_which}')
+        print(f'[Config/GCV] WARN: Primary service_account.json not found - using BACKUP: {_which}')
     else:
         print(f'[Config/GCV] OK: GCV credentials loaded: {_which}')
 else:

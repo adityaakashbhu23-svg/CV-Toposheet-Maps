@@ -291,17 +291,24 @@ def ocr_tile(
             import os as _os
             from pathlib import Path as _Path
             _root = _Path(__file__).parent.parent
-            _primary  = _root / 'service_account2.json'
+            _primary  = _root / 'service_account.json'
+            _legacy   = _root / 'service_account2.json'
             _backup   = _root / 'Service_account_Backup.json'
             _cur_creds = _os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '')
-            _on_primary = _primary.exists() and (str(_primary) in _cur_creds or 'service_account2' in _cur_creds)
+            _on_primary = (
+                (_primary.exists() and str(_primary) in _cur_creds) or
+                (_legacy.exists() and str(_legacy) in _cur_creds) or
+                ('service_account.json' in _cur_creds) or
+                ('service_account2.json' in _cur_creds)
+            )
             if _on_primary and _backup.exists():
                 print(f'[OCR/GCV] ⚠️  Primary account failed — switching to backup: {_backup.name}')
                 _os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(_backup)
                 _reset_gcv_client()
                 results, gcv_failed = ocr_tile_gcv(tile, confidence_threshold)
                 # Restore primary for future tiles
-                _os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(_primary)
+                _restore = _primary if _primary.exists() else _legacy
+                _os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(_restore)
                 _reset_gcv_client()
                 if not gcv_failed:
                     print(f'[OCR/GCV] ✅  Backup GCV account ({_backup.name}) succeeded.')
