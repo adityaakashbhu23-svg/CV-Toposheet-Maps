@@ -16,9 +16,9 @@ import sqlite3
 import importlib
 import subprocess
 from pathlib import Path
-from urllib.parse import quote as url_quote
+from urllib.parse import quote as url_quote, urlparse
 
-from flask import Flask, request, redirect, url_for, send_file, Response, stream_with_context
+from flask import Flask, request, redirect, url_for, send_file, Response, stream_with_context, jsonify
 from werkzeug.utils import secure_filename
 
 # In a frozen PyInstaller EXE, __file__ is inside _internal/ (read-only bundle dir).
@@ -231,74 +231,79 @@ def save_env():
 
 @app.route('/report_ai_content', methods=['POST'])
 def report_ai_content():
-  ref = request.referrer or ''
-  if not ref.startswith('http://127.0.0.1:'):
-    return '', 403
+  try:
+    ref = request.referrer or ''
+    if ref:
+      ref_host = (urlparse(ref).hostname or '').lower()
+      req_host = (request.host.split(':', 1)[0] if request.host else '').lower()
+      allowed_hosts = {'127.0.0.1', 'localhost', '0.0.0.0'}
+      if ref_host and ref_host not in allowed_hosts and ref_host != req_host:
+        return jsonify({'ok': False, 'error': 'Unauthorized request origin.'}), 403
 
-  payload = request.get_json(force=True, silent=True) or {}
-  report_id = f"AIR-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
+    payload = request.get_json(force=True, silent=True) or {}
+    report_id = f"AIR-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
 
-  def _clean_str(key: str, limit: int = 4000) -> str:
-    return str(payload.get(key, '')).strip()[:limit]
+    def _clean_str(key: str, limit: int = 4000) -> str:
+      return str(payload.get(key, '')).strip()[:limit]
 
-  model = _clean_str('model', 80)
-  category = _clean_str('category', 120)
-  snippet = _clean_str('snippet', 2000)
-  details = _clean_str('details', 4000)
-  contact = _clean_str('contact', 200)
-  files = payload.get('files') or []
-  if not isinstance(files, list):
-    files = []
-  files = [str(item).strip()[:260] for item in files[:20] if str(item).strip()]
+    model = _clean_str('model', 80)
+    category = _clean_str('category', 120)
+    snippet = _clean_str('snippet', 2000)
+    details = _clean_str('details', 4000)
+    contact = _clean_str('contact', 200)
+    files = payload.get('files') or []
+    if not isinstance(files, list):
+      files = []
+    files = [str(item).strip()[:260] for item in files[:20] if str(item).strip()]
 
-  if not details:
-    return json.dumps({'ok': False, 'error': 'Please describe the issue.'}), 400
+    if not details:
+      return jsonify({'ok': False, 'error': 'Please describe the issue.'}), 400
 
-  LOGS_DIR.mkdir(exist_ok=True)
-  record = {
-    'report_id': report_id,
-    'created_at': time.strftime('%Y-%m-%d %H:%M:%S'),
-    'category': category or 'inappropriate-output',
-    'model': model,
-    'files': files,
-    'snippet': snippet,
-    'details': details,
-    'contact': contact,
-  }
-  with open(AI_REPORTS_FILE, 'a', encoding='utf-8') as handle:
-    handle.write(json.dumps(record, ensure_ascii=True) + '\n')
+    LOGS_DIR.mkdir(exist_ok=True)
+    record = {
+      'report_id': report_id,
+      'created_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+      'category': category or 'inappropriate-output',
+      'model': model,
+      'files': files,
+      'snippet': snippet,
+      'details': details,
+      'contact': contact,
+    }
+    with open(AI_REPORTS_FILE, 'a', encoding='utf-8') as handle:
+      handle.write(json.dumps(record, ensure_ascii=True) + '\n')
 
-  issue_title = url_quote(f'AI content report: {report_id}')
-  issue_body = url_quote(
-    f"Report ID: {report_id}\n"
-    f"Category: {record['category']}\n"
-    f"Model: {model or 'not provided'}\n"
-    f"Files: {', '.join(files) if files else 'not provided'}\n\n"
-    f"Snippet:\n{snippet or 'not provided'}\n\n"
-    f"Details:\n{details}\n\n"
-    f"Contact: {contact or 'not provided'}\n"
-  )
-  issue_url = f'{SUPPORT_ISSUES_URL}?title={issue_title}&body={issue_body}'
-  report_text = (
-    f"Report ID: {report_id}\n"
-    f"Category: {record['category']}\n"
-    f"Model: {model or 'not provided'}\n"
-    f"Files: {', '.join(files) if files else 'not provided'}\n\n"
-    f"Snippet:\n{snippet or 'not provided'}\n\n"
-    f"Details:\n{details}\n\n"
-    f"Contact: {contact or 'not provided'}"
-  )
-  email_subject = url_quote(f'CVToposheet AI content report: {report_id}')
-  email_body = url_quote(report_text)
-  email_url = f'mailto:{SUPPORT_EMAIL}?subject={email_subject}&body={email_body}'
-  return json.dumps({
-    'ok': True,
-    'report_id': report_id,
-    'issue_url': issue_url,
-    'report_text': report_text,
-    'support_email': SUPPORT_EMAIL,
-    'email_url': email_url,
-  })
+    issue_title = url_quote(f'AI content report: {report_id}')
+    issue_body = url_quote(
+      f"Report ID: {report_id}\n"
+      f"Category: {record['category']}\n"
+      f"Model: {model or 'not provided'}\n"
+      f"Snippet:\n{snippet or 'not provided'}\n\n"
+      f"Details:\n{details}\n\n"
+      f"Contact: {contact or 'not provided'}\n"
+    )
+    issue_url = f'{SUPPORT_ISSUES_URL}?title={issue_title}&body={issue_body}'
+    report_text = (
+      f"Report ID: {report_id}\n"
+      f"Category: {record['category']}\n"
+      f"Model: {model or 'not provided'}\n"
+      f"Snippet:\n{snippet or 'not provided'}\n\n"
+      f"Details:\n{details}\n\n"
+      f"Contact: {contact or 'not provided'}"
+    )
+    email_subject = url_quote(f'CVToposheet AI content report: {report_id}')
+    email_body = url_quote(report_text)
+    email_url = f'mailto:{SUPPORT_EMAIL}?subject={email_subject}&body={email_body}'
+    return jsonify({
+      'ok': True,
+      'report_id': report_id,
+      'issue_url': issue_url,
+      'report_text': report_text,
+      'support_email': SUPPORT_EMAIL,
+      'email_url': email_url,
+    })
+  except Exception as exc:
+    return jsonify({'ok': False, 'error': f'Failed to save report: {exc}'}), 500
 
 
 @app.route('/upload', methods=['POST'])
@@ -1011,12 +1016,14 @@ body { min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; b
 .report-status.ok { color:#166534; display:block; }
 .report-status.err { color:#b91c1c; display:block; }
 .report-link { color:#0E7490; font-weight:700; text-decoration:underline; }
-.report-actions { display:none; gap:10px; margin-right:auto; align-items:center; flex-wrap:wrap; }
+.report-actions { display:flex; gap:10px; margin-right:auto; align-items:center; flex-wrap:wrap; }
 .report-actions.open { display:flex; }
 .report-action-btn { border:none; border-radius:6px; padding:8px 12px; font-size:0.82em; font-weight:700; cursor:pointer; }
 .report-action-copy { background:#e0f2f7; color:#0E7490; }
 .report-action-copy:hover { background:#cbe8f1; }
 .report-action-link { color:#0E7490; text-decoration:underline; font-size:0.82em; font-weight:700; }
+#reportModal .btn-cancel,
+#reportModal .btn-save { min-width:132px; display:inline-flex; align-items:center; justify-content:center; }
 /* PIN Lock */
 .pin-overlay { display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,.55); align-items:center; justify-content:center; z-index:2000; }
 .pin-overlay.open { display:flex; }
@@ -1111,7 +1118,7 @@ body { min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; b
   <div class="hdr-actions">
     <a href="/results" class="db-banner-btn" title="View all processed maps in the database">&#128202;&nbsp;<span class="db-label">Map Database</span></a>
     <button class="kill-banner-btn" id="killBannerBtn" onclick="killRunningJob()" title="Kill any running job and restart the server">&#9632;<span class="kill-label"> Restart Server</span></button>
-    <button class="report-btn" onclick="openReportModal()" title="Report inappropriate or unsafe AI-generated content">&#9888;&#xFE0E;<span class="report-label"> Report AI Content</span></button>
+    <button type="button" class="report-btn" id="reportBtn" title="Report inappropriate or unsafe AI-generated content">&#9888;&#xFE0E;<span class="report-label"> Report AI Content</span></button>
     <button class="settings-btn" onclick="openSettings()">&#9881;&#xFE0E;<span class="settings-label"> Settings</span></button>
   </div>
 </div>
@@ -1417,29 +1424,118 @@ function closeHelp() {
   document.getElementById('helpOverlay').classList.remove('open');
 }
 
-function openReportModal() {
-  const model = document.getElementById('modelInput');
-  const files = (_fileList || []).map(f => f.name).join(', ');
-  window._lastReportPayload = null;
-  document.getElementById('report_model').value = model ? model.value : '';
-  document.getElementById('report_files').value = files;
-  document.getElementById('report_category').value = 'inappropriate-output';
-  document.getElementById('report_snippet').value = '';
-  document.getElementById('report_details').value = '';
-  document.getElementById('report_contact').value = '';
-  const status = document.getElementById('reportStatus');
-  status.className = 'report-status';
-  status.style.display = 'none';
-  status.innerHTML = '';
-  const actions = document.getElementById('reportActions');
-  actions.classList.remove('open');
-  document.getElementById('reportIssueLink').href = '#';
-  document.getElementById('reportEmailLink').href = '#';
-  document.getElementById('reportModal').classList.add('open');
+const REPORT_GITHUB_NEW_ISSUE_URL = 'https://github.com/adityaakashbhu23-svg/CV-Toposheet-Maps/issues/new';
+
+function buildQuickGithubIssueUrl() {
+  const model = getReportModelValue() || 'not provided';
+  const title = encodeURIComponent('AI content report (quick)');
+  const body = encodeURIComponent(
+    'Category: AI content concern\\n' +
+    'Model: ' + model + '\\n\\n' +
+    'Please describe the issue here.\\n'
+  );
+  return REPORT_GITHUB_NEW_ISSUE_URL + '?title=' + title + '&body=' + body;
+}
+
+function updateQuickGithubReportLink() {
+  const issueLink = document.getElementById('reportIssueLink');
+  if (!issueLink) return;
+  issueLink.href = buildQuickGithubIssueUrl();
+  issueLink.textContent = 'Report in GitHub';
+}
+
+function openReportModal(evt) {
+  try {
+    if (evt && typeof evt.preventDefault === 'function') evt.preventDefault();
+    const model = document.getElementById('modelInput');
+    const selectedNameEl = document.querySelector('.model-card.selected .mc-name');
+    const selectedName = selectedNameEl ? selectedNameEl.textContent.replace(/\\s+/g, ' ').trim() : '';
+    const selectedCode = model ? model.value : '';
+    const modelSelect = document.getElementById('report_model');
+    const modelOther = document.getElementById('report_model_other');
+    const known = ['best','fast','ensemble','openai','claude','grok','gemini','offline'];
+    window._lastReportPayload = null;
+    if (modelSelect) {
+      if (known.includes(selectedCode)) {
+        modelSelect.value = selectedCode;
+        if (modelOther) modelOther.value = '';
+      } else {
+        modelSelect.value = 'other';
+        if (modelOther) modelOther.value = selectedName || selectedCode;
+      }
+    }
+    toggleReportModelOther();
+    const catEl = document.getElementById('report_category');
+    if (catEl) catEl.value = 'inappropriate-output';
+    const snipEl = document.getElementById('report_snippet');
+    if (snipEl) snipEl.value = '';
+    const detEl = document.getElementById('report_details');
+    if (detEl) detEl.value = '';
+    const conEl = document.getElementById('report_contact');
+    if (conEl) conEl.value = '';
+    const statusEl = document.getElementById('reportStatus');
+    if (statusEl) { statusEl.className = 'report-status'; statusEl.style.display = 'none'; statusEl.innerHTML = ''; }
+    updateQuickGithubReportLink();
+    const modal = document.getElementById('reportModal');
+    if (modal) {
+      modal.classList.add('open');
+    } else {
+      alert('Report modal not found on this page. Please go to the main page to report AI content.');
+    }
+  } catch (err) {
+    var errBanner = document.getElementById('_reportErrBanner');
+    if (!errBanner) {
+      errBanner = document.createElement('div');
+      errBanner.id = '_reportErrBanner';
+      errBanner.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#dc2626;color:#fff;padding:12px 24px;border-radius:8px;z-index:9999;font-weight:bold;box-shadow:0 4px 12px rgba(0,0,0,.4);';
+      document.body.appendChild(errBanner);
+    }
+    errBanner.textContent = 'Report button error: ' + err.message;
+    errBanner.style.display = 'block';
+    setTimeout(function(){ errBanner.style.display = 'none'; }, 8000);
+  }
 }
 
 function closeReportModal() {
   document.getElementById('reportModal').classList.remove('open');
+}
+
+function toggleReportModelOther() {
+  const select = document.getElementById('report_model');
+  const row = document.getElementById('report_model_other_row');
+  if (!select || !row) return;
+  row.style.display = select.value === 'other' ? 'flex' : 'none';
+  updateQuickGithubReportLink();
+}
+
+function getReportModelValue() {
+  const select = document.getElementById('report_model');
+  const other = document.getElementById('report_model_other');
+  if (!select) return '';
+  if (select.value === 'other') {
+    return (other && other.value ? other.value.trim() : 'Other');
+  }
+  const opt = select.options[select.selectedIndex];
+  return opt ? opt.text : select.value;
+}
+
+function openEmailFallback(emailUrl) {
+  if (!emailUrl) return;
+  try {
+    // Primary path for desktop browser/webview mailto handling.
+    window.location.href = emailUrl;
+    // Secondary path for environments that ignore location mailto navigation.
+    setTimeout(() => {
+      try {
+        const a = document.createElement('a');
+        a.href = emailUrl;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } catch (_) {}
+    }, 50);
+  } catch (_) {}
 }
 
 function submitAIReport() {
@@ -1447,12 +1543,17 @@ function submitAIReport() {
   const submitBtn = document.getElementById('reportSubmitBtn');
   const payload = {
     category: document.getElementById('report_category').value,
-    model: document.getElementById('report_model').value,
-    files: document.getElementById('report_files').value.split(',').map(s => s.trim()).filter(Boolean),
+    model: getReportModelValue(),
     snippet: document.getElementById('report_snippet').value.trim(),
     details: document.getElementById('report_details').value.trim(),
     contact: document.getElementById('report_contact').value.trim(),
   };
+  if (document.getElementById('report_model').value === 'other' && !payload.model) {
+    status.className = 'report-status err';
+    status.style.display = 'block';
+    status.textContent = 'Please type the model name for Other.';
+    return;
+  }
   if (!payload.details) {
     status.className = 'report-status err';
     status.style.display = 'block';
@@ -1466,18 +1567,34 @@ function submitAIReport() {
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(payload)
   })
-    .then(async r => ({ ok: r.ok, data: await r.json() }))
-    .then(({ ok, data }) => {
-      if (!ok || !data.ok) throw new Error((data && data.error) || 'Submission failed.');
+    .then(async r => {
+      const raw = await r.text();
+      let data = null;
+      if (raw) {
+        try {
+          data = JSON.parse(raw);
+        } catch (_err) {
+          data = null;
+        }
+      }
+      return { ok: r.ok, status: r.status, data, raw };
+    })
+    .then(({ ok, status: httpStatus, data, raw }) => {
+      if (!ok || !data || !data.ok) {
+        const msg = (data && data.error)
+          || (raw && raw.trim())
+          || ('Submission failed (HTTP ' + httpStatus + ').');
+        throw new Error(msg);
+      }
       window._lastReportPayload = data;
       status.className = 'report-status ok';
       status.style.display = 'block';
-      status.innerHTML = 'Saved with reference <b>' + data.report_id + '</b>. Choose any reporting channel below.';
+      status.innerHTML = 'Saved with reference <b>' + data.report_id + '</b>.';
       const actions = document.getElementById('reportActions');
       actions.classList.add('open');
       document.getElementById('reportIssueLink').href = data.issue_url;
-      document.getElementById('reportEmailLink').href = data.email_url;
-      document.getElementById('reportEmailLink').textContent = 'Send Email (' + data.support_email + ')';
+      document.getElementById('reportIssueLink').textContent = 'Report in GitHub';
+      openEmailFallback(data.email_url);
     })
     .catch(err => {
       status.className = 'report-status err';
@@ -1486,7 +1603,7 @@ function submitAIReport() {
     })
     .finally(() => {
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Submit Report';
+      submitBtn.textContent = 'Submit';
     });
 }
 
@@ -1581,6 +1698,10 @@ function showAllSections() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  var reportBtn = document.getElementById('reportBtn');
+  if (reportBtn) {
+    reportBtn.addEventListener('click', function(e) { openReportModal(e); });
+  }
   document.getElementById('settingsModal').addEventListener('click', function(e) {
     if (e.target === this) closeSettings();
   });
@@ -1766,12 +1887,22 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
             </select>
           </div>
           <div class="report-field">
-            <label>Selected model</label>
-            <input type="text" id="report_model" class="report-readonly" readonly>
+            <label>Model</label>
+            <select id="report_model" onchange="toggleReportModelOther()">
+              <option value="best">Best Quality (Vertex AI Gemini)</option>
+              <option value="fast">Fast (Groq LLaMA)</option>
+              <option value="ensemble">All LLMs Together (Ensemble)</option>
+              <option value="openai">OpenAI GPT-4o</option>
+              <option value="claude">Claude Haiku</option>
+              <option value="grok">Grok (xAI)</option>
+              <option value="gemini">Gemini API</option>
+              <option value="offline">Offline (EasyOCR + Groq)</option>
+              <option value="other">Other (type manually)</option>
+            </select>
           </div>
-          <div class="report-field">
-            <label>Map file(s)</label>
-            <input type="text" id="report_files" class="report-readonly" readonly>
+          <div class="report-field" id="report_model_other_row" style="display:none;">
+            <label>Other model name</label>
+            <input type="text" id="report_model_other" placeholder="Type model name" oninput="updateQuickGithubReportLink()">
           </div>
           <div class="report-field">
             <label>Problematic output snippet</label>
@@ -1790,12 +1921,10 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
       <div class="modal-footer">
         <span class="report-status" id="reportStatus"></span>
         <div class="report-actions" id="reportActions">
-          <button class="report-action-btn report-action-copy" type="button" onclick="copyAIReport()">Copy Report</button>
-          <a class="report-action-link" id="reportIssueLink" href="#" target="_blank" rel="noopener">Open GitHub issue</a>
-          <a class="report-action-link" id="reportEmailLink" href="#">Send Email</a>
+          <a class="report-action-link" id="reportIssueLink" href="#" target="_blank" rel="noopener">Report in GitHub</a>
         </div>
-        <button class="btn-cancel" onclick="closeReportModal()">Cancel</button>
-        <button class="btn-save" id="reportSubmitBtn" onclick="submitAIReport()">Submit Report</button>
+        <button type="button" class="btn-cancel" onclick="closeReportModal()">Cancel</button>
+        <button type="button" class="btn-save" id="reportSubmitBtn" onclick="submitAIReport()">Submit</button>
       </div>
     </div>
   </div>
@@ -2233,15 +2362,16 @@ if __name__ == '__main__':
     if os.name == 'nt':
         try:
             result = subprocess.check_output(
-                'netstat -ano | findstr "127.0.0.1:5000" | findstr LISTENING',
-                shell=True, stderr=subprocess.DEVNULL
-            ).decode()
+                ['netstat', '-ano'],
+                stderr=subprocess.DEVNULL
+            ).decode(errors='replace')
             for line in result.strip().splitlines():
-                parts = line.split()
-                pid = parts[-1] if parts else None
-                if pid and pid.isdigit() and int(pid) != os.getpid():
-                    subprocess.call(['taskkill', '/F', '/PID', pid],
-                                    shell=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if '127.0.0.1:5000' in line and 'LISTENING' in line:
+                    parts = line.split()
+                    pid = parts[-1] if parts else None
+                    if pid and pid.isdigit() and int(pid) != os.getpid():
+                        subprocess.call(['taskkill', '/F', '/PID', pid],
+                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
             pass
     log = logging.getLogger('werkzeug')
