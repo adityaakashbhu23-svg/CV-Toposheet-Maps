@@ -133,5 +133,6 @@ if __name__ == '__main__':
         """)
 
     window.events.loaded += _intercept_new_windows
+    window.events.shown += lambda: window.maximize()
 
     webview.start()

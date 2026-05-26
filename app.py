@@ -673,7 +673,7 @@ html, body { height:100%; overflow:hidden; font-family:'Segoe UI', system-ui, Ar
     <div class="slide hidden" id="slide1">
       <div class="inner">
         <div class="slide-icon">&#128273;</div>
-        <div class="slide-title">Step 1 &mdash; Add an LLM API Key</div>
+        <div class="slide-title">Step 1: Add an LLM API Key</div>
         <div class="slide-sub">Required for feature extraction. Go to <b>&#9881; Settings</b> on the home screen and paste at least one key.</div>
         <div class="card">
           <div class="card-row">
@@ -685,7 +685,7 @@ html, body { height:100%; overflow:hidden; font-family:'Segoe UI', system-ui, Ar
             </div>
           </div>
         </div>
-        <div class="divider">&#8212; OR &#8212;</div>
+        <div class="divider">or</div>
         <div class="card">
           <div class="card-row">
             <div class="card-icon">&#128171;</div>
@@ -696,7 +696,7 @@ html, body { height:100%; overflow:hidden; font-family:'Segoe UI', system-ui, Ar
             </div>
           </div>
         </div>
-        <div class="note">&#9888;&#65039; <b>Without an API key</b> the pipeline runs but produces wrong results &mdash; blank Feature Types, 0.50 confidence, noise rows.</div>
+        <div class="note">&#9888;&#65039; <b>Without an API key</b> the pipeline runs but produces wrong results: blank Feature Types, 0.50 confidence, noise rows.</div>
       </div>
     </div>
 
@@ -704,8 +704,8 @@ html, body { height:100%; overflow:hidden; font-family:'Segoe UI', system-ui, Ar
     <div class="slide hidden" id="slide2">
       <div class="inner">
         <div class="slide-icon">&#9729;&#65039;</div>
-        <div class="slide-title">Step 2 &mdash; Google Cloud Vision JSON <span class="badge badge-opt" style="font-size:.55em;vertical-align:middle">OPTIONAL</span></div>
-        <div class="slide-sub">Enables premium OCR via Google Cloud Vision API. Without it, the app uses EasyOCR (offline, slower, less accurate).</div>
+        <div class="slide-title">Step 2: Google Cloud Vision JSON</div>
+        <div class="slide-sub">Strongly recommended for best accuracy. Enables premium OCR via Google Cloud Vision API. Without it, the app uses EasyOCR (offline, slower, less accurate).</div>
         <div class="card">
           <div class="card-title" style="margin-bottom:8px;">How to get the JSON file</div>
           <div class="card-desc" style="line-height:1.8;">
@@ -724,7 +724,8 @@ html, body { height:100%; overflow:hidden; font-family:'Segoe UI', system-ui, Ar
             </div>
           </div>
         </div>
-        <div class="note">&#128310; You can skip this step now and add it later from Settings at any time.</div>
+        <div class="note">&#9989; For best accuracy, set this up now. You can also add it later via <b>Settings &#8594; Help &#8594; Google Cloud</b>.</div>
+        <div class="note" style="margin-top:8px;background:#f0fdf4;border-color:#86efac;color:#166534;">&#11088; For even better results, also enable <b>Vertex AI API</b> in Google Cloud Console (APIs &amp; Services &rarr; Library &rarr; search &ldquo;Vertex AI&rdquo; &rarr; Enable).</div>
       </div>
     </div>
 
@@ -735,10 +736,10 @@ html, body { height:100%; overflow:hidden; font-family:'Segoe UI', system-ui, Ar
         <div class="slide-title">You&rsquo;re Ready to Go!</div>
         <div class="slide-sub">Here&rsquo;s how to process your first map.</div>
         <div class="ready-list">
-          <div class="ready-row"><div class="ri">&#128444;&#65039;</div><div class="rt"><b>Upload</b> &mdash; Drag &amp; drop a JPG / PNG / TIF toposheet onto the home screen (up to 500 MB)</div></div>
-          <div class="ready-row"><div class="ri">&#127917;</div><div class="rt"><b>Choose Model</b> &mdash; Select a processing model from the right panel (Best Quality recommended)</div></div>
-          <div class="ready-row"><div class="ri">&#9654;&#65039;</div><div class="rt"><b>Process</b> &mdash; Click <b>Process Map</b> and watch live progress (5&ndash;30 min depending on map size)</div></div>
-          <div class="ready-row"><div class="ri">&#128202;</div><div class="rt"><b>Search &amp; Export</b> &mdash; Find results in <b>Map Database</b>. Export to CSV or Excel anytime.</div></div>
+          <div class="ready-row"><div class="ri">&#128444;&#65039;</div><div class="rt"><b>Upload:</b> Drag &amp; drop a JPG / PNG / TIF toposheet onto the home screen (up to 500 MB)</div></div>
+          <div class="ready-row"><div class="ri">&#127917;</div><div class="rt"><b>Choose Model:</b> Select a processing model from the right panel (Best Quality recommended)</div></div>
+          <div class="ready-row"><div class="ri">&#9654;&#65039;</div><div class="rt"><b>Process:</b> Click <b>Process Map</b> and watch live progress (5&ndash;30 min depending on map size)</div></div>
+          <div class="ready-row"><div class="ri">&#128202;</div><div class="rt"><b>Search &amp; Export:</b> Find results in <b>Map Database</b>. Export to CSV or Excel anytime.</div></div>
         </div>
       </div>
     </div>
@@ -926,6 +927,33 @@ body { min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; b
 .pin-shake { animation:pinShake .4s ease; }
 .modal-lock-btn { background:none; border:none; font-size:1.2em; cursor:pointer; padding:0 6px; line-height:1; opacity:.7; }
 .modal-lock-btn:hover { opacity:1; }
+.modal-info-btn { background:none; border:none; font-size:1.15em; cursor:pointer; padding:0 5px; line-height:1; color:#0E7490; opacity:.75; font-weight:900; }
+.modal-info-btn:hover { opacity:1; }
+.help-overlay { display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,.55); align-items:center; justify-content:center; z-index:1200; }
+.help-overlay.open { display:flex; }
+.help-box { background:#fff; border-radius:14px; box-shadow:0 8px 40px rgba(14,116,144,.3); width:90vw; max-width:620px; max-height:85vh; display:flex; flex-direction:column; overflow:hidden; }
+.help-box-hdr { background:#0E7490; padding:13px 18px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.help-box-hdr h3 { color:#fff; font-size:0.98em; font-weight:700; }
+.help-box-close { background:none; border:none; color:#fff; font-size:1.3em; cursor:pointer; line-height:1; }
+.help-box-body { padding:18px 20px; overflow-y:auto; flex:1; }
+.help-sec-title { font-size:0.97em; font-weight:800; color:#0E7490; margin:0 0 10px; display:flex; align-items:center; gap:7px; }
+.help-sep { height:1px; background:#e0eaf0; margin:18px 0; }
+.help-what-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
+.help-wc { background:#f0f9fb; border:1px solid #b8dde8; border-radius:8px; padding:10px 12px; }
+.help-wc-num { font-size:1em; font-weight:800; color:#0E7490; }
+.help-wc-title { font-weight:700; font-size:0.85em; color:#1e3a4a; }
+.help-wc-desc { font-size:0.76em; color:#6b8a99; margin-top:2px; }
+.help-card { background:#f8fafc; border:1.5px solid #d4eaf0; border-radius:9px; padding:11px 14px; margin-bottom:8px; }
+.help-card-title { font-weight:700; color:#0E7490; font-size:0.88em; margin-bottom:4px; }
+.help-card-desc { font-size:0.82em; color:#5a7a8a; line-height:1.65; }
+.help-card-link { font-size:0.8em; color:#0891b2; margin-top:4px; }
+.help-note { background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:9px 13px; font-size:0.81em; color:#92400e; line-height:1.5; margin-top:8px; }
+.help-divider { text-align:center; font-size:0.75em; color:#aaa; font-weight:700; margin:8px 0; }
+.help-badge-free { display:inline-block; font-size:0.68em; font-weight:700; border-radius:4px; padding:1px 6px; margin-left:5px; background:#dcfce7; color:#166534; vertical-align:middle; }
+.help-badge-opt { display:inline-block; font-size:0.68em; font-weight:700; border-radius:4px; padding:1px 6px; margin-left:5px; background:#fef9c3; color:#92400e; vertical-align:middle; }
+.help-ready-row { display:flex; align-items:flex-start; gap:10px; background:#f8fafc; border:1px solid #d4eaf0; border-radius:8px; padding:10px 13px; margin-bottom:6px; }
+.help-ready-row .hri { font-size:1.1em; flex-shrink:0; margin-top:1px; }
+.help-ready-row .hrt { font-size:0.83em; color:#2a4a5a; line-height:1.4; }
 .pin-confirm-label { font-size:0.82em; color:#555; margin:12px 0 6px; }
 .db-banner-btn { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); color:#fff; border-radius:7px; padding:0 clamp(8px,1.5vw,16px); height:36px; font-size:0.85em; font-weight:700; cursor:pointer; transition:background .2s; text-decoration:none; display:inline-flex; align-items:center; gap:5px; box-sizing:border-box; white-space:nowrap; }
 .db-banner-btn:hover { background:rgba(255,255,255,.25); }
@@ -1271,6 +1299,12 @@ function openSettings() {
 function closeSettings() {
   document.getElementById('settingsModal').classList.remove('open');
 }
+function openHelp() {
+  document.getElementById('helpOverlay').classList.add('open');
+}
+function closeHelp() {
+  document.getElementById('helpOverlay').classList.remove('open');
+}
 
 function saveSettings() {
   const payload = {};
@@ -1512,6 +1546,7 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
     <div class="modal-header">
       <h2>&#9881; API Key Settings</h2>
       <div style="display:flex;align-items:center;gap:4px;">
+        <button class="modal-info-btn" onclick="event.stopPropagation(); openHelp()" title="Help &amp; Setup Guide">&#8505;</button>
         <button class="modal-lock-btn" id="pinLockBtn" onclick="event.stopPropagation(); openPinSetup()" title="Set PIN lock">🔓</button>
         <button class="modal-close" onclick="closeSettings()">&#x2715;</button>
       </div>
@@ -1670,6 +1705,71 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
       <span class="save-notice" id="saveNotice">&#10003; Saved to .env</span>
       <button class="btn-cancel" onclick="closeSettings()">Cancel</button>
       <button class="btn-save" onclick="saveSettings()">Save Keys</button>
+    </div>
+  </div>
+</div>
+
+<!-- Help Overlay -->
+<div class="help-overlay" id="helpOverlay" onclick="if(event.target===this)closeHelp()">
+  <div class="help-box">
+    <div class="help-box-hdr">
+      <h3>&#8505;&nbsp; Help &amp; Setup Guide</h3>
+      <button class="help-box-close" onclick="closeHelp()">&#x2715;</button>
+    </div>
+    <div class="help-box-body">
+
+      <!-- What is this app -->
+      <div class="help-sec-title">&#128255; What is CV-Toposheet?</div>
+      <p style="font-size:0.84em;color:#4a6070;line-height:1.55;margin-bottom:10px;">Automatically extract &amp; digitize geographic feature names from scanned historical topographic maps.</p>
+      <div class="help-what-grid">
+        <div class="help-wc"><div class="help-wc-num">1</div><div class="help-wc-title">Upload</div><div class="help-wc-desc">Drop a scanned toposheet (JPG / PNG / TIF)</div></div>
+        <div class="help-wc"><div class="help-wc-num">2</div><div class="help-wc-title">OCR</div><div class="help-wc-desc">AI reads all text from every tile of the map</div></div>
+        <div class="help-wc"><div class="help-wc-num">3</div><div class="help-wc-title">Clean</div><div class="help-wc-desc">LLM corrects errors &amp; classifies features</div></div>
+        <div class="help-wc"><div class="help-wc-num">4</div><div class="help-wc-title">Search</div><div class="help-wc-desc">Query &amp; export the full results database</div></div>
+      </div>
+
+      <div class="help-sep"></div>
+
+      <!-- LLM API Key -->
+      <div class="help-sec-title">&#128273; Step 1: Add an LLM API Key</div>
+      <p style="font-size:0.83em;color:#4a6070;line-height:1.5;margin-bottom:10px;">Required for feature extraction. Paste at least one key in <b>&#9881; Settings</b>.</p>
+      <div class="help-card">
+        <div class="help-card-title">&#9889; Groq API Key <span class="help-badge-free">FREE &amp; FASTEST</span></div>
+        <div class="help-card-desc">No credit card needed. Best for first-time users.</div>
+        <div class="help-card-link">&#128279; console.groq.com &rarr; Sign up &rarr; API Keys &rarr; Create</div>
+      </div>
+      <div class="help-divider">or</div>
+      <div class="help-card">
+        <div class="help-card-title">&#128171; Gemini API Key <span class="help-badge-free">FREE</span></div>
+        <div class="help-card-desc">Google Gemini Flash. Free tier is generous.</div>
+        <div class="help-card-link">&#128279; aistudio.google.com/apikey &rarr; Create API key</div>
+      </div>
+      <div class="help-note">&#9888;&#65039; <b>Without an API key</b> the pipeline runs but produces wrong results: blank Feature Types, 0.50 confidence, noise rows.</div>
+
+      <div class="help-sep"></div>
+
+      <!-- GCV JSON -->
+      <div class="help-sec-title">&#9729;&#65039; Step 2: Google Cloud Vision JSON</div>
+      <p style="font-size:0.83em;color:#4a6070;line-height:1.5;margin-bottom:10px;">Strongly recommended for best accuracy. Enables premium OCR via Google Cloud Vision API. Without it, the app uses EasyOCR (offline, slower, less accurate).</p>
+      <div class="help-card">
+        <div class="help-card-title">How to get the JSON file</div>
+        <div class="help-card-desc">1. Go to <b>console.cloud.google.com</b><br>2. Enable <b>Cloud Vision API</b> (APIs &amp; Services &rarr; Library)<br>3. IAM &amp; Admin &rarr; Service Accounts &rarr; Create &rarr; Keys &rarr; Add Key &rarr; JSON<br>4. File downloads automatically</div>
+      </div>
+      <div class="help-card" style="margin-top:8px;">
+        <div class="help-card-title">&#128196; Upload in Settings</div>
+        <div class="help-card-desc">Click <b>&#9881; Settings &rarr; Google Cloud &rarr; Upload GCP Service Account JSON</b> and select the downloaded file.</div>
+      </div>
+      <div class="help-note" style="margin-top:8px;background:#f0fdf4;border-color:#86efac;color:#166534;">&#11088; For even better results, also enable <b>Vertex AI API</b> in Google Cloud Console (APIs &amp; Services &rarr; Library &rarr; search &ldquo;Vertex AI&rdquo; &rarr; Enable).</div>
+
+      <div class="help-sep"></div>
+
+      <!-- How to process -->
+      <div class="help-sec-title">&#128640; How to Process Your First Map</div>
+      <div class="help-ready-row"><div class="hri">&#128444;&#65039;</div><div class="hrt"><b>Upload:</b> Drag &amp; drop a JPG / PNG / TIF toposheet onto the home screen (up to 500 MB)</div></div>
+      <div class="help-ready-row"><div class="hri">&#127917;</div><div class="hrt"><b>Choose Model:</b> Select a processing model from the right panel (Best Quality recommended)</div></div>
+      <div class="help-ready-row"><div class="hri">&#9654;&#65039;</div><div class="hrt"><b>Process:</b> Click <b>Process Map</b> and watch live progress (5&ndash;30 min depending on map size)</div></div>
+      <div class="help-ready-row"><div class="hri">&#128202;</div><div class="hrt"><b>Search &amp; Export:</b> Find results in <b>Map Database</b>. Export to CSV or Excel anytime.</div></div>
+
     </div>
   </div>
 </div>
