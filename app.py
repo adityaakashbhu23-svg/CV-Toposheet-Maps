@@ -19,6 +19,7 @@ from pathlib import Path
 from urllib.parse import quote as url_quote
 
 from flask import Flask, request, redirect, url_for, send_file, Response, stream_with_context
+from werkzeug.utils import secure_filename
 
 # In a frozen PyInstaller EXE, __file__ is inside _internal/ (read-only bundle dir).
 # User-writable data (maps, results, .env, JSON credentials) must go next to the EXE.
@@ -114,11 +115,13 @@ def _merge_session_to_global(session_id: str) -> None:
             genv = os.environ.copy()
             genv['RESULTS_FOLDER'] = str(RESULTS_DIR)
             genv['PYTHONIOENCODING'] = 'utf-8'
-            subprocess.run(
+            result = subprocess.run(
                 [sys.executable, 'export_table.py'],
                 cwd=str(BASE_DIR), env=genv,
                 timeout=120, capture_output=True
             )
+            if result.returncode != 0:
+                print('[merge] export_table.py failed:', result.stderr.decode(errors='replace'))
             print(f'[merge] Added {inserted} features from session {session_id} to global DB.')
         else:
             print(f'[merge] Session {session_id} maps already in global DB — skipped.')
@@ -220,9 +223,10 @@ def upload():
     saved_names = []
     for f in files:
         if f.filename and Path(f.filename).suffix.lower() in ALLOWED_EXT:
-            dest = session_maps / f.filename
+            safe_name = secure_filename(f.filename)
+            dest = session_maps / safe_name
             f.save(str(dest))
-            saved_names.append(f.filename)
+            saved_names.append(safe_name)
 
     if not saved_names:
         return redirect('/')
