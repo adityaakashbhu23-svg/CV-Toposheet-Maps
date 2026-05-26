@@ -527,10 +527,12 @@ def delete_maps():
         env = os.environ.copy()
         env['RESULTS_FOLDER'] = str(RESULTS_DIR)
         env['PYTHONIOENCODING'] = 'utf-8'
-        subprocess.run([sys.executable, 'export_table.py'],
-                       cwd=str(BASE_DIR), env=env, timeout=60, capture_output=True)
-    except Exception:
-        pass
+        result = subprocess.run([sys.executable, 'export_table.py'],
+                                cwd=str(BASE_DIR), env=env, timeout=60, capture_output=True)
+        if result.returncode != 0:
+            print('[export] export_table.py failed:', result.stderr.decode(errors='replace'))
+    except Exception as e:
+        print('[export] export_table.py exception:', e)
 
     resp = app.response_class(
         json.dumps({'ok': True, 'deleted_rows': deleted, 'maps': len(maps_to_delete)}),
