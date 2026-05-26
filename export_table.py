@@ -161,7 +161,7 @@ def export_html(rows: list, map_filter: str = '', type_filter: str = ''):
             f"{conf:.2f}",                   # 9: conf_str
             conf_color,                      # 10: conf_color
         ])
-    rows_json = json.dumps(rows_data, ensure_ascii=False)
+    rows_json = json.dumps(rows_data, ensure_ascii=False).replace('</', '<\/')
 
     # ── sidebar checkboxes ────────────────────────────────────────────────
     checkboxes_html = ''

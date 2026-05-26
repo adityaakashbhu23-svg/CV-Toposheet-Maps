@@ -220,13 +220,6 @@ def query_features(
 
     where = ' AND '.join(clauses)
     sql = f"""
-        SELECT map_name, feature_name, feature_type,
-               grid_reference, confidence
-        FROM   features
-        WHERE  {where}
-        ORDER  BY feature_name
-    """
-    sql = f"""
         SELECT map_name, original_text, feature_name, feature_type,
                grid_reference, confidence
         FROM   features
