@@ -15,22 +15,37 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.13'
           cache: 'pip'
+
+      - name: Cache Homebrew packages
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: ${{ runner.os }}-brew-create-dmg
+          restore-keys: ${{ runner.os }}-brew-
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-          pip install pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-WebKit
+          pip install pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-WebKit pyobjc-framework-Quartz
 
       - name: Build Mac app with PyInstaller
         run: |
-          pyinstaller _build/build_mac.spec --clean --noconfirm
+          pyinstaller _build/build_mac.spec --clean --noconfirm --distpath dist
+
+      - name: Verify build
+        run: |
+          if [ ! -d "dist/CVToposheet.app" ]; then
+            echo "ERROR: CVToposheet.app not found in dist/"
+            exit 1
+          fi
+          echo "Build OK: $(du -sh dist/CVToposheet.app | cut -f1)"
 
       - name: Create DMG installer
         run: |
