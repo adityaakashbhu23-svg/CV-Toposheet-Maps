@@ -32,7 +32,17 @@ ENV_FILE = BASE_DIR / '.env'
 RESULTS_DIR = BASE_DIR / 'results'
 MAPS_DIR = BASE_DIR / 'maps'
 LOGS_DIR = BASE_DIR / 'logs'
-FIRST_RUN_FLAG = BASE_DIR / '.welcome_done'
+
+# On macOS app bundles, BASE_DIR is inside the read-only .app package.
+# Use ~/Library/Application Support/CVToposheet/ for user-writable state.
+import platform as _platform
+if _platform.system() == 'Darwin' and getattr(sys, 'frozen', False):
+    _USER_DATA_DIR = Path.home() / 'Library' / 'Application Support' / 'CVToposheet'
+    _USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+else:
+    _USER_DATA_DIR = BASE_DIR
+
+FIRST_RUN_FLAG = _USER_DATA_DIR / '.welcome_done'
 AI_REPORTS_FILE = LOGS_DIR / 'ai_content_reports.jsonl'
 SUPPORT_ISSUES_URL = 'https://github.com/adityaakashbhu23-svg/CV-Toposheet-Maps/issues/new'
 SUPPORT_EMAIL = 'cvtoposheet@outlook.com'
