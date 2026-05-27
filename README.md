@@ -43,7 +43,6 @@ Store and build assets are included in the repository for packaging under [_buil
 For Windows, download the packaged installer from [Releases](../../releases):
 
 - `CVToposheet_Setup.exe`
-- `CVToposheet_*.msix`
 
 The Windows installer is self-contained and does not require a separate Python installation.
 
@@ -155,7 +154,6 @@ Excluded from version control:
 This repository includes packaging support for:
 
 - Windows EXE via PyInstaller
-- Windows MSIX packaging
 - macOS app and DMG via GitHub Actions on macOS runners
 
 ## License
