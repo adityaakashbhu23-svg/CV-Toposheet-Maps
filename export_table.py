@@ -71,16 +71,33 @@ def parse_map_name(raw: str):
 
 # ─────────────────────────────────────────────────────────────────────────────
 def fetch_rows(map_filter: str = '', type_filter: str = '') -> list:
+    if not DB_PATH.exists():
+        return []
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
-    query = """
-        SELECT feature_name, original_text, grid_reference, map_name, feature_type, confidence,
-               sheet_ref, district, survey_year
-        FROM features
-        WHERE 1=1
-    """
+    # Detect which optional columns exist (added in newer schema versions)
+    try:
+        cur.execute("PRAGMA table_info(features)")
+        existing_cols = {row[1] for row in cur.fetchall()}
+    except Exception:
+        conn.close()
+        return []
+
+    if not existing_cols:
+        conn.close()
+        return []
+
+    optional = []
+    for col in ('sheet_ref', 'district', 'survey_year'):
+        if col in existing_cols:
+            optional.append(col)
+
+    base_cols = 'feature_name, original_text, grid_reference, map_name, feature_type, confidence'
+    select_cols = base_cols + (', ' + ', '.join(optional) if optional else '')
+
+    query = f"SELECT {select_cols} FROM features WHERE 1=1"
     params = []
     if map_filter:
         query += " AND map_name LIKE ?"
@@ -90,8 +107,11 @@ def fetch_rows(map_filter: str = '', type_filter: str = '') -> list:
         params.append(type_filter)
     query += " ORDER BY map_name, grid_reference, feature_name"
 
-    cur.execute(query, params)
-    rows = [dict(r) for r in cur.fetchall()]
+    try:
+        cur.execute(query, params)
+        rows = [dict(r) for r in cur.fetchall()]
+    except Exception:
+        rows = []
     conn.close()
     return rows
 
