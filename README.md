@@ -23,9 +23,9 @@ Supported map families include Survey of India, UK Ordnance Survey, USGS, and si
 
 ## Screenshots And Assets
 
-Repository visuals:
+![App banner](Images/7.png)
 
-![App poster](_build/poster_720x1080.png)
+![App screenshot](Images/1%20(4).png)
 
 Store and build assets are included in the repository for packaging under [_build/Assets](_build/Assets).
 
