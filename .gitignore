@@ -14,9 +14,12 @@ dist/
 build/
 .eggs/
 
-# Build outputs - large binary files not for git
+# Build outputs - large binary files not for git (upload to GitHub Release instead)
 _build/CVToposheet_Setup.exe
+_build/CVToposheet_Win_Setup.exe
 _build/*.msix
+_build/*.dmg
+_build/*.exe
 _build/dist/
 _build/work/
 _build/msix_staging/
