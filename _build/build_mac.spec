@@ -126,7 +126,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='CVToposheet.app',
-    icon=None,
+    icon=os.path.join(SPECPATH, 'app_icon.icns'),
     bundle_identifier='com.adityaakash.cvtoposheet',
     info_plist={
         'CFBundleName': 'CV-Toposheet',

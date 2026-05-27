@@ -38,6 +38,22 @@ jobs:
           pip install pyinstaller
           pip install pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-WebKit pyobjc-framework-Quartz
 
+      - name: Generate .icns icon
+        run: |
+          mkdir -p _build/app_icon.iconset
+          sips -z 16 16     _build/app_icon.png --out _build/app_icon.iconset/icon_16x16.png
+          sips -z 32 32     _build/app_icon.png --out _build/app_icon.iconset/icon_16x16@2x.png
+          sips -z 32 32     _build/app_icon.png --out _build/app_icon.iconset/icon_32x32.png
+          sips -z 64 64     _build/app_icon.png --out _build/app_icon.iconset/icon_32x32@2x.png
+          sips -z 128 128   _build/app_icon.png --out _build/app_icon.iconset/icon_128x128.png
+          sips -z 256 256   _build/app_icon.png --out _build/app_icon.iconset/icon_128x128@2x.png
+          sips -z 256 256   _build/app_icon.png --out _build/app_icon.iconset/icon_256x256.png
+          sips -z 512 512   _build/app_icon.png --out _build/app_icon.iconset/icon_256x256@2x.png
+          sips -z 512 512   _build/app_icon.png --out _build/app_icon.iconset/icon_512x512.png
+          sips -z 1024 1024 _build/app_icon.png --out _build/app_icon.iconset/icon_512x512@2x.png
+          iconutil -c icns _build/app_icon.iconset -o _build/app_icon.icns
+          echo "Icon generated: $(ls -lh _build/app_icon.icns)"
+
       - name: Build Mac app with PyInstaller
         run: |
           pyinstaller _build/build_mac.spec --clean --noconfirm --distpath dist
