@@ -48,7 +48,7 @@ InfoBeforeFile=ABOUT.txt
 InfoAfterFile=AFTER_INSTALL.txt
 ; Output
 OutputDir=.
-OutputBaseFilename=CVToposheet_Setup
+OutputBaseFilename=CVToposheet_Win_Setup
 ; App icon (used on installer wizard, desktop shortcut, Add/Remove Programs)
 SetupIconFile={#IconFile}
 UninstallDisplayIcon={app}\{#AppExeName}
