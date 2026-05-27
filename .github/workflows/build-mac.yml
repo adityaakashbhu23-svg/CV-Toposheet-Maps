@@ -68,6 +68,7 @@ jobs:
 
       - name: Create DMG installer
         run: |
+          printf "How to open:\n1. Drag app to Applications\n2. Right-click → Open\n3. Click Open in popup\n(One time only)" > dist/README.txt
           brew install create-dmg
           create-dmg \
             --volname "CV-Toposheet" \
