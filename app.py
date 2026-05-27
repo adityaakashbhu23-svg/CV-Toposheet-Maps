@@ -2362,16 +2362,15 @@ if __name__ == '__main__':
     if os.name == 'nt':
         try:
             result = subprocess.check_output(
-                ['netstat', '-ano'],
-                stderr=subprocess.DEVNULL
-            ).decode(errors='replace')
+                'netstat -ano | findstr "127.0.0.1:5000" | findstr LISTENING',
+                shell=True, stderr=subprocess.DEVNULL
+            ).decode()
             for line in result.strip().splitlines():
-                if '127.0.0.1:5000' in line and 'LISTENING' in line:
-                    parts = line.split()
-                    pid = parts[-1] if parts else None
-                    if pid and pid.isdigit() and int(pid) != os.getpid():
-                        subprocess.call(['taskkill', '/F', '/PID', pid],
-                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                parts = line.split()
+                pid = parts[-1] if parts else None
+                if pid and pid.isdigit() and int(pid) != os.getpid():
+                    subprocess.call(['taskkill', '/F', '/PID', pid],
+                                    shell=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
             pass
     log = logging.getLogger('werkzeug')

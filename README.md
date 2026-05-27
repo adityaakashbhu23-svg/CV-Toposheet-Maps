@@ -23,7 +23,7 @@ Supported map families include Survey of India, UK Ordnance Survey, USGS, and si
 
 ## Screenshots And Assets
 
-![App banner](Images/7.png)
+![App homepage](Images/1%20(2).png)
 
 ![App screenshot](Images/1%20(4).png)
 
