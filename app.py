@@ -192,8 +192,8 @@ def welcome():
 def dismiss_welcome():
     try:
         FIRST_RUN_FLAG.touch()
-    except Exception:
-        pass
+    except Exception as e:
+        app.logger.error("Could not write welcome flag to %s: %s", FIRST_RUN_FLAG, e)
     return redirect('/')
 
 
