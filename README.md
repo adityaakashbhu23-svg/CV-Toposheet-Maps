@@ -40,11 +40,16 @@ Store and build assets are included in the repository for packaging under [_buil
 
 ## Downloads
 
-For Windows, download the packaged installer from [Releases](../../releases):
+Download the latest release from [Releases](../../releases):
 
-- `CVToposheet_Setup.exe`
+**Windows**
+- `CVToposheet_Win_Setup.exe` — Inno Setup installer (recommended)
+- `CVToposheet_1.0.0.0_x64.msix` — Microsoft Store package
 
-The Windows installer is self-contained and does not require a separate Python installation.
+**macOS**
+- `CVToposheet.dmg` — Drag-and-drop disk image
+
+All installers are self-contained and do not require a separate Python installation.
 
 ## Quick Start From Source
 
