@@ -33,11 +33,14 @@ RESULTS_DIR = BASE_DIR / 'results'
 MAPS_DIR = BASE_DIR / 'maps'
 LOGS_DIR = BASE_DIR / 'logs'
 
-# On macOS app bundles, BASE_DIR is inside the read-only .app package.
-# Use ~/Library/Application Support/CVToposheet/ for user-writable state.
+# MSIX (WindowsApps) and macOS .app bundles are read-only — use a writable user dir.
 import platform as _platform
-if _platform.system() == 'Darwin' and getattr(sys, 'frozen', False):
-    _USER_DATA_DIR = Path.home() / 'Library' / 'Application Support' / 'CVToposheet'
+if getattr(sys, 'frozen', False):
+    if _platform.system() == 'Darwin':
+        _USER_DATA_DIR = Path.home() / 'Library' / 'Application Support' / 'CVToposheet'
+    else:
+        # Windows: %LOCALAPPDATA%\CVToposheet\ (writable even from MSIX sandbox)
+        _USER_DATA_DIR = Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'CVToposheet'
     _USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
 else:
     _USER_DATA_DIR = BASE_DIR
