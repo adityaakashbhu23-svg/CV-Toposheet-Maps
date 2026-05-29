@@ -155,6 +155,33 @@ def preprocess_for_ocr(img: np.ndarray) -> np.ndarray:
     return sharpened
 
 
+def preprocess_for_ocr_stable(img: np.ndarray) -> np.ndarray:
+    """
+    Crash-safe OCR preprocessing for frozen Windows builds.
+
+    Uses only lightweight, stable OpenCV ops and avoids heavy denoise/deskew
+    paths that can trigger native crashes on some machines.
+    """
+    if len(img.shape) == 3:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = img.copy()
+
+    h, w = gray.shape
+    if h < 300 or w < 300:
+        scale = max(2, 300 // min(h, w))
+        gray = cv2.resize(gray, (w * scale, h * scale), interpolation=cv2.INTER_LINEAR)
+
+    # Lightweight local contrast enhancement.
+    clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray)
+
+    # Mild sharpen without heavy filters.
+    blurred = cv2.GaussianBlur(enhanced, (0, 0), sigmaX=1.0)
+    sharpened = cv2.addWeighted(enhanced, 1.5, blurred, -0.5, 0)
+    return sharpened
+
+
 def tile_count(img: np.ndarray, tile_size: int = 1024, overlap: int = 50) -> int:
     """Return the total number of tiles that will be generated for an image."""
     h, w = img.shape[:2]

@@ -11,12 +11,28 @@ from typing import List, Dict, Optional
 # EasyOCR (secondary) – initialized lazily to avoid slow startup
 _easyocr_reader = None
 
+# Reduce native thread contention in frozen builds (OpenCV/Torch/OpenMP).
+try:
+    cv2.setNumThreads(1)
+except Exception:
+    pass
+
+# Optional: enable local EasyOCR fallback when GCV fails.
+# Default OFF for stability in packaged desktop builds.
+_GCV_LOCAL_FALLBACK = os.getenv('GCV_LOCAL_FALLBACK', 'false').lower() in ('1', 'true', 'yes')
+
 def _get_easyocr():
     """Return a cached EasyOCR reader (initializes on first call)."""
     global _easyocr_reader
     if _easyocr_reader is None:
         import easyocr
         print('[OCR] Initializing EasyOCR (first run may download models)...')
+        try:
+            import torch
+            torch.set_num_threads(1)
+            torch.set_num_interop_threads(1)
+        except Exception:
+            pass
         _easyocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
         print('[OCR] EasyOCR ready.')
     return _easyocr_reader
@@ -25,10 +41,58 @@ def _get_easyocr():
 # Google Cloud Vision client – singleton to avoid per-tile auth overhead
 _gcv_client = None
 _gcv_client_lock = None  # will be set to threading.Lock on first use
+_gcv_failover_lock = None
+_gcv_using_backup = False
 
 # EasyOCR is not thread-safe – serialize all calls behind a lock
 import threading as _threading
 _easyocr_lock = _threading.Lock()
+
+
+def _get_failover_lock():
+    global _gcv_failover_lock
+    if _gcv_failover_lock is None:
+        _gcv_failover_lock = _threading.Lock()
+    return _gcv_failover_lock
+
+
+def _resolve_gcv_account_paths():
+    """Resolve current/primary/backup credential paths from runtime environment."""
+    cur_env = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '').strip()
+    cur_path = Path(cur_env) if cur_env else None
+
+    search_dirs = []
+    if cur_path is not None:
+        search_dirs.append(cur_path.parent)
+
+    local_appdata = os.environ.get('LOCALAPPDATA', '').strip()
+    if local_appdata:
+        search_dirs.append(Path(local_appdata) / 'CVToposheet')
+
+    # Dev fallback only.
+    search_dirs.append(Path(__file__).parent.parent)
+
+    # Deduplicate and keep existing dirs.
+    uniq_dirs = []
+    for d in search_dirs:
+        if d not in uniq_dirs and d.exists():
+            uniq_dirs.append(d)
+
+    primary = None
+    backup = None
+    for d in uniq_dirs:
+        p1 = d / 'service_account.json'
+        p2 = d / 'service_account2.json'
+        pb = d / 'Service_account_Backup.json'
+        if primary is None:
+            if p1.exists():
+                primary = p1
+            elif p2.exists():
+                primary = p2
+        if backup is None and pb.exists():
+            backup = pb
+
+    return cur_path, primary, backup
 
 def _get_gcv_client():
     """Return a cached GCV ImageAnnotatorClient (initializes once per process)."""
@@ -200,7 +264,7 @@ def ocr_tile_easyocr(tile: np.ndarray, confidence_threshold: float = 0.3) -> Lis
     reader = _get_easyocr()
     try:
         with _easyocr_lock:
-            results = reader.readtext(tile, detail=1, paragraph=False)
+            results = reader.readtext(tile, detail=1, paragraph=False, workers=0, batch_size=1)
     except Exception as e:
         print(f'[OCR] EasyOCR error: {e}')
         return []
@@ -287,34 +351,32 @@ def ocr_tile(
         # Many tiles on a map are legitimately blank (terrain, water, roads).
         # Falling back to EasyOCR on blank tiles = 30-60s per tile = hours of wasted time.
         if gcv_failed:
-            # Try backup service account before EasyOCR
-            import os as _os
-            from pathlib import Path as _Path
-            _root = _Path(__file__).parent.parent
-            _primary  = _root / 'service_account.json'
-            _legacy   = _root / 'service_account2.json'
-            _backup   = _root / 'Service_account_Backup.json'
-            _cur_creds = _os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '')
-            _on_primary = (
-                (_primary.exists() and str(_primary) in _cur_creds) or
-                (_legacy.exists() and str(_legacy) in _cur_creds) or
-                ('service_account.json' in _cur_creds) or
-                ('service_account2.json' in _cur_creds)
-            )
-            if _on_primary and _backup.exists():
-                print(f'[OCR/GCV] ⚠️  Primary account failed — switching to backup: {_backup.name}')
-                _os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(_backup)
-                _reset_gcv_client()
-                results, gcv_failed = ocr_tile_gcv(tile, confidence_threshold)
-                # Restore primary for future tiles
-                _restore = _primary if _primary.exists() else _legacy
-                _os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(_restore)
-                _reset_gcv_client()
-                if not gcv_failed:
-                    print(f'[OCR/GCV] ✅  Backup GCV account ({_backup.name}) succeeded.')
+            # Thread-safe failover: switch once to backup and keep it for this
+            # process. Restoring per tile causes races in parallel OCR.
+            global _gcv_using_backup
+            with _get_failover_lock():
+                if _gcv_using_backup:
+                    # Another tile already switched credentials.
+                    results, gcv_failed = ocr_tile_gcv(tile, confidence_threshold)
+                else:
+                    cur_path, primary_path, backup_path = _resolve_gcv_account_paths()
+                    cur_name = (cur_path.name.lower() if cur_path else '')
+                    on_primary = cur_name in ('service_account.json', 'service_account2.json')
+
+                    if on_primary and backup_path is not None:
+                        print(f'[OCR/GCV] ⚠️  Primary account failed — switching to backup: {backup_path.name}')
+                        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(backup_path)
+                        _reset_gcv_client()
+                        _gcv_using_backup = True
+                        results, gcv_failed = ocr_tile_gcv(tile, confidence_threshold)
+                        if not gcv_failed:
+                            print(f'[OCR/GCV] ✅  Backup GCV account ({backup_path.name}) succeeded.')
             if gcv_failed:
-                print('[OCR/GCV] ❌  GCV failed on both accounts — falling back to EasyOCR for this tile...')
-                results = ocr_tile_easyocr(tile, confidence_threshold)
+                if _GCV_LOCAL_FALLBACK:
+                    print('[OCR/GCV] ❌  GCV failed on both accounts — falling back to EasyOCR for this tile...')
+                    results = ocr_tile_easyocr(tile, confidence_threshold)
+                else:
+                    print('[OCR/GCV] ❌  GCV failed on both accounts — local fallback disabled (set GCV_LOCAL_FALLBACK=true to enable).')
     elif engine == 'easyocr':
         results = ocr_tile_easyocr(tile, confidence_threshold)
     elif engine == 'tesseract':

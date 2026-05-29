@@ -500,6 +500,15 @@ def _stream_gen(filename, model, session_id):
         env['PYTHONIOENCODING'] = 'utf-8'
         env['PYTHONUNBUFFERED'] = '1'
 
+        # Local OCR (EasyOCR/Tesseract) can trigger native DLL crashes when
+        # BLAS/OpenMP thread pools over-subscribe in frozen builds.
+        if env_overrides.get('OCR_ENGINE', '').lower() != 'gcv':
+          env.setdefault('OMP_NUM_THREADS', '1')
+          env.setdefault('OPENBLAS_NUM_THREADS', '1')
+          env.setdefault('MKL_NUM_THREADS', '1')
+          env.setdefault('NUMEXPR_NUM_THREADS', '1')
+          env.setdefault('KMP_DUPLICATE_LIB_OK', 'TRUE')
+
         session_maps_dir    = str(_USER_DATA_DIR / 'maps'    / session_id)
         session_results_dir = str(_USER_DATA_DIR / 'results' / session_id)
         session_logs_dir    = str(_USER_DATA_DIR / 'logs'    / session_id)

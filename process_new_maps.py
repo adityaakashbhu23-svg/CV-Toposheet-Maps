@@ -16,7 +16,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 import config
-from utils.image_utils import load_image, get_image_info, generate_tiles, preprocess_for_ocr, tile_count
+from utils.image_utils import load_image, get_image_info, generate_tiles, preprocess_for_ocr_stable, tile_count
 from utils.ocr_utils import ocr_tile, translate_bbox_to_global, deduplicate
 from utils.llm_utils import clean_with_llm
 from utils.cpu_utils import throttler as _throttler
@@ -145,7 +145,7 @@ def phase2_ocr(new_maps: list, manifest: dict) -> dict:
 
         def _process_tile(args):
             tile_img, x, y, x2, y2 = args
-            processed = preprocess_for_ocr(tile_img)
+            processed = preprocess_for_ocr_stable(tile_img)
             detections = ocr_tile(processed, config.OCR_CONFIDENCE)
             return translate_bbox_to_global(detections, x, y)
 
@@ -165,15 +165,27 @@ def phase2_ocr(new_maps: list, manifest: dict) -> dict:
             elif tile_count_n > 30:
                 workers = min(workers, 4)
         print(f'  [CPU] {_throttler.status()}  ocr_workers={workers}')
-        with tqdm(total=len(tiles_list), desc='  OCR tiles', unit='tile') as pbar:
-            with ThreadPoolExecutor(max_workers=workers) as pool:
-                futures = {pool.submit(_process_tile, t): t for t in tiles_list}
-                for fut in as_completed(futures):
+        # For local OCR engines (especially EasyOCR), running inside a worker
+        # thread can trigger native crashes in frozen builds. If workers resolve
+        # to 1, process tiles on the main thread.
+        if _ocr_engine != 'gcv' and workers <= 1:
+            with tqdm(total=len(tiles_list), desc='  OCR tiles', unit='tile') as pbar:
+                for t in tiles_list:
                     try:
-                        all_detections.extend(fut.result())
+                        all_detections.extend(_process_tile(t))
                     except Exception as e:
                         print(f'  [OCR] Tile error: {e}')
                     pbar.update(1)
+        else:
+            with tqdm(total=len(tiles_list), desc='  OCR tiles', unit='tile') as pbar:
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    futures = {pool.submit(_process_tile, t): t for t in tiles_list}
+                    for fut in as_completed(futures):
+                        try:
+                            all_detections.extend(fut.result())
+                        except Exception as e:
+                            print(f'  [OCR] Tile error: {e}')
+                        pbar.update(1)
 
         before = len(all_detections)
         all_detections = deduplicate(all_detections, iou_threshold=0.4)

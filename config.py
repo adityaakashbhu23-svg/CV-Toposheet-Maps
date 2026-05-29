@@ -79,7 +79,14 @@ if _gcv_creds_path.exists():
     else:
         print(f'[Config/GCV] OK: GCV credentials loaded: {_which}')
 else:
-    print(f'[Config/GCV] ERROR: No GCV service account found - GCV OCR will fail. Upload one in Settings.')
+    _needs_gcp = (
+        os.getenv('LLM_PROVIDER', 'vertex').lower() == 'vertex'
+        or os.getenv('OCR_ENGINE', 'gcv').lower() == 'gcv'
+    )
+    if _needs_gcp:
+        print('[Config/GCV] ERROR: No GCV service account found - GCV/Vertex will fail. Upload one in Settings.')
+    else:
+        print('[Config/GCV] INFO: No GCV service account found (not needed for current mode).')
 
 # ── OCR / Tiling ──────────────────────────────────────────────
 OCR_ENGINE      = os.getenv('OCR_ENGINE', 'gcv').lower()   # gcv | easyocr | tesseract
