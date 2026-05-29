@@ -11,11 +11,15 @@ from dotenv import load_dotenv
 # read-only (e.g. Program Files). Use the directory next to the EXE for all
 # user-writable data: .env, service account JSONs, maps, results, logs.
 if getattr(sys, 'frozen', False):
-    _DATA_DIR = Path(sys.executable).parent   # install dir next to the EXE
+    import platform as _plat
+    if _plat.system() == 'Darwin':
+        _DATA_DIR = Path.home() / 'Library' / 'Application Support' / 'CVToposheet'
+    else:
+        _DATA_DIR = Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'CVToposheet'
 else:
     _DATA_DIR = Path(__file__).parent          # project root (dev mode)
 
-# Load .env from the data dir
+# Load .env from the writable user data dir
 load_dotenv(_DATA_DIR / '.env')
 
 # ── API Keys ──────────────────────────────────────────────────

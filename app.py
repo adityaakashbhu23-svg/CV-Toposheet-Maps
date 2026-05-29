@@ -27,10 +27,9 @@ if getattr(sys, 'frozen', False):
     BASE_DIR = Path(sys.executable).parent   # install dir  e.g. C:\...\CV-Toposheet\
 else:
     BASE_DIR = Path(__file__).parent          # project root (dev mode)
-ENV_FILE = BASE_DIR / '.env'
 
 # MSIX (WindowsApps) and macOS .app bundles are read-only — use a writable user dir
-# for ALL data that the app writes at runtime (maps, results, logs, flags).
+# for ALL data that the app writes at runtime (maps, results, logs, flags, .env).
 import platform as _platform
 if getattr(sys, 'frozen', False):
     if _platform.system() == 'Darwin':
@@ -46,8 +45,14 @@ RESULTS_DIR = _USER_DATA_DIR / 'results'
 MAPS_DIR    = _USER_DATA_DIR / 'maps'
 LOGS_DIR    = _USER_DATA_DIR / 'logs'
 
-FIRST_RUN_FLAG = _USER_DATA_DIR / '.welcome_done'
+FIRST_RUN_FLAG  = _USER_DATA_DIR / '.welcome_done'
+ENV_FILE        = _USER_DATA_DIR / '.env'
 AI_REPORTS_FILE = LOGS_DIR / 'ai_content_reports.jsonl'
+
+# Load saved API keys / settings from the writable user data dir on every launch.
+from dotenv import load_dotenv as _load_dotenv
+_load_dotenv(ENV_FILE, override=False)  # override=False: don't clobber env vars already set
+
 SUPPORT_ISSUES_URL = 'https://github.com/adityaakashbhu23-svg/CV-Toposheet-Maps/issues/new'
 SUPPORT_EMAIL = 'cvtoposheet@outlook.com'
 
@@ -159,11 +164,17 @@ def _write_env(env: dict):
         if m:
             existing_keys[m.group(1)] = i
     for k, v in env.items():
-        entry = f'{k}={v}\n'
-        if k in existing_keys:
-            lines[existing_keys[k]] = entry
+        if v:
+            entry = f'{k}={v}\n'
+            if k in existing_keys:
+                lines[existing_keys[k]] = entry
+            else:
+                lines.append(entry)
         else:
-            lines.append(entry)
+            # Empty value — remove the key from .env so it doesn't come back on restart
+            if k in existing_keys:
+                lines[existing_keys[k]] = None  # mark for removal
+    lines = [l for l in lines if l is not None]
     with open(ENV_FILE, 'w', encoding='utf-8') as f:
         f.writelines(lines)
 
@@ -208,7 +219,7 @@ def upload_service_account():
     safe_name = Path(target).name  # strip any path component
     if not safe_name.endswith('.json'):
         safe_name = 'service_account.json'
-    dest = BASE_DIR / safe_name
+    dest = _USER_DATA_DIR / safe_name
     f.save(str(dest))
     # Update env so it takes effect immediately
     os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(dest)
@@ -232,7 +243,7 @@ def save_env():
         elif k in os.environ:
             del os.environ[k]
     try:
-        _write_env({k: v for k, v in payload.items() if v})
+        _write_env(payload)  # pass all keys including empty — _write_env removes blanked keys
     except Exception:
         pass
     try:
@@ -439,11 +450,12 @@ def _stream_gen(filename, model, session_id):
     needs_gcp = (provider == 'vertex') or (ocr_engine == 'gcv')
     if needs_gcp:
         creds = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '').strip()
-        _root = Path(__file__).parent
         _gcp_found = (creds and Path(creds).exists()) or \
-             (_root / 'service_account.json').exists() or \
-                     (_root / 'service_account2.json').exists() or \
-                     (_root / 'Service_account_Backup.json').exists()
+             (_USER_DATA_DIR / 'service_account.json').exists() or \
+             (_USER_DATA_DIR / 'service_account2.json').exists() or \
+             (_USER_DATA_DIR / 'Service_account_Backup.json').exists() or \
+             (BASE_DIR / 'service_account.json').exists() or \
+             (BASE_DIR / 'Service_account_Backup.json').exists()
         if not _gcp_found:
             if provider == 'vertex':
                 detail = 'Vertex AI LLM + Google Cloud Vision OCR both require'
