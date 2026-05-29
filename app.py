@@ -53,6 +53,27 @@ AI_REPORTS_FILE = LOGS_DIR / 'ai_content_reports.jsonl'
 from dotenv import load_dotenv as _load_dotenv
 _load_dotenv(ENV_FILE, override=False)  # override=False: don't clobber env vars already set
 
+# ── Fresh-reinstall detection (MSIX / Mac .app / EXE) ────────────────────────
+# On every (re)install the app binary is brand-new, so its ctime is later than
+# any flag written during a previous install.  If we detect this, delete the
+# flag so the welcome page shows once more for that fresh install.
+def _reset_flag_if_reinstalled() -> None:
+    if not getattr(sys, 'frozen', False):
+        return   # dev mode — never auto-reset
+    if not FIRST_RUN_FLAG.exists():
+        return   # flag not written yet — nothing to reset
+    try:
+        exe_ctime  = Path(sys.executable).stat().st_ctime
+        flag_mtime = FIRST_RUN_FLAG.stat().st_mtime
+        if exe_ctime > flag_mtime:
+            # Executable is newer than the flag → fresh reinstall
+            FIRST_RUN_FLAG.unlink(missing_ok=True)
+    except Exception:
+        pass   # never break startup over this
+
+_reset_flag_if_reinstalled()
+# ─────────────────────────────────────────────────────────────────────────────
+
 SUPPORT_ISSUES_URL = 'https://github.com/adityaakashbhu23-svg/CV-Toposheet-Maps/issues/new'
 SUPPORT_EMAIL = 'cvtoposheet@outlook.com'
 

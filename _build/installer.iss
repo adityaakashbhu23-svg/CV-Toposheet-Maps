@@ -102,14 +102,21 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
     ValueData: """{app}\{#AppExeName}"""; \
     Flags: uninsdeletevalue; Tasks: startupentry; Check: not IsAdminInstallMode
 
+[InstallDelete]
+; Clear the first-run flag on every (re)install so the welcome page always appears.
+; User data lives in %LOCALAPPDATA%\CVToposheet\ (writable, survives updates).
+Type: files; Name: "{localappdata}\CVToposheet\.welcome_done"
+
 [UninstallDelete]
-; Remove all user-generated data when the app is uninstalled
-Type: filesandordirs; Name: "{app}\results"
-Type: filesandordirs; Name: "{app}\maps"
-Type: filesandordirs; Name: "{app}\logs"
-Type: files;          Name: "{app}\.env"
-Type: files;          Name: "{app}\.welcome_done"
-Type: files;          Name: "{app}\service_account.json"
-Type: files;          Name: "{app}\service_account2.json"
+; Remove runtime user data from %LOCALAPPDATA%\CVToposheet\ on uninstall.
+; (The old {app} paths are kept for any legacy data left there.)
+Type: filesandordirs; Name: "{localappdata}\CVToposheet\results"
+Type: filesandordirs; Name: "{localappdata}\CVToposheet\maps"
+Type: filesandordirs; Name: "{localappdata}\CVToposheet\logs"
+Type: files;          Name: "{localappdata}\CVToposheet\.env"
+Type: files;          Name: "{localappdata}\CVToposheet\.welcome_done"
+Type: files;          Name: "{localappdata}\CVToposheet\service_account.json"
+Type: files;          Name: "{localappdata}\CVToposheet\service_account2.json"
+Type: dirifempty;     Name: "{localappdata}\CVToposheet"
 Type: dirifempty;     Name: "{app}"
 
