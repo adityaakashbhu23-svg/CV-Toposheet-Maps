@@ -29,11 +29,8 @@ else:
     BASE_DIR = Path(__file__).parent          # project root (dev mode)
 ENV_FILE = BASE_DIR / '.env'
 
-RESULTS_DIR = BASE_DIR / 'results'
-MAPS_DIR = BASE_DIR / 'maps'
-LOGS_DIR = BASE_DIR / 'logs'
-
-# MSIX (WindowsApps) and macOS .app bundles are read-only — use a writable user dir.
+# MSIX (WindowsApps) and macOS .app bundles are read-only — use a writable user dir
+# for ALL data that the app writes at runtime (maps, results, logs, flags).
 import platform as _platform
 if getattr(sys, 'frozen', False):
     if _platform.system() == 'Darwin':
@@ -44,6 +41,10 @@ if getattr(sys, 'frozen', False):
     _USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
 else:
     _USER_DATA_DIR = BASE_DIR
+
+RESULTS_DIR = _USER_DATA_DIR / 'results'
+MAPS_DIR    = _USER_DATA_DIR / 'maps'
+LOGS_DIR    = _USER_DATA_DIR / 'logs'
 
 FIRST_RUN_FLAG = _USER_DATA_DIR / '.welcome_done'
 AI_REPORTS_FILE = LOGS_DIR / 'ai_content_reports.jsonl'
@@ -91,7 +92,7 @@ def _map_count() -> int:
 def _merge_session_to_global(session_id: str) -> None:
     """Copy newly processed map(s) from a session DB into the global DB,
     then regenerate the global table_export.html so Map Database stays current."""
-    session_db = BASE_DIR / 'results' / session_id / 'toposheet.db'
+    session_db = _USER_DATA_DIR / 'results' / session_id / 'toposheet.db'
     global_db  = RESULTS_DIR / 'toposheet.db'
     if not session_db.exists():
         return
@@ -328,7 +329,7 @@ def upload():
         return redirect('/')
 
     session_id = uuid.uuid4().hex[:12]
-    session_maps = BASE_DIR / 'maps' / session_id
+    session_maps = _USER_DATA_DIR / 'maps' / session_id
     session_maps.mkdir(parents=True, exist_ok=True)
 
     saved_names = []
@@ -466,9 +467,9 @@ def _stream_gen(filename, model, session_id):
         env['PYTHONIOENCODING'] = 'utf-8'
         env['PYTHONUNBUFFERED'] = '1'
 
-        session_maps_dir    = str(BASE_DIR / 'maps'    / session_id)
-        session_results_dir = str(BASE_DIR / 'results' / session_id)
-        session_logs_dir    = str(BASE_DIR / 'logs'    / session_id)
+        session_maps_dir    = str(_USER_DATA_DIR / 'maps'    / session_id)
+        session_results_dir = str(_USER_DATA_DIR / 'results' / session_id)
+        session_logs_dir    = str(_USER_DATA_DIR / 'logs'    / session_id)
         Path(session_maps_dir).mkdir(parents=True, exist_ok=True)
         Path(session_results_dir).mkdir(parents=True, exist_ok=True)
         Path(session_logs_dir).mkdir(parents=True, exist_ok=True)
@@ -565,8 +566,8 @@ def get_env():
 @app.route('/results/<session_id>', methods=['GET', 'HEAD'])
 def results(session_id=None):
     if session_id:
-        out = BASE_DIR / 'results' / session_id / 'table_export.html'
-        res_dir = str(BASE_DIR / 'results' / session_id)
+        out = _USER_DATA_DIR / 'results' / session_id / 'table_export.html'
+        res_dir = str(_USER_DATA_DIR / 'results' / session_id)
     else:
         out = RESULTS_DIR / 'table_export.html'
         res_dir = str(RESULTS_DIR)
