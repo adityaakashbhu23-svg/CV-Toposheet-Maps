@@ -44,8 +44,7 @@ Store and build assets are included in the repository for packaging under [_buil
 Download the latest release from [Releases](../../releases):
 
 **Windows**
-- `CVToposheet_Win_Setup.exe` Inno Setup installer (recommended)
-- `CVToposheet_1.0.0.0_x64.msix` Microsoft Store package
+- `CVToposheet_Win_Setup.exe` 
 
 **macOS**
 - `CVToposheet.dmg` — Drag-and-drop disk image
