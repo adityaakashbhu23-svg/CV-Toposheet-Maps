@@ -47,7 +47,7 @@ Download the latest release from [Releases](../../releases):
 - `CVToposheet_Win_Setup.exe` 
 
 **macOS**
-- `CVToposheet.dmg` — Drag-and-drop disk image
+- `CVToposheet.dmg` Drag-and-drop disk image
 
 All installers are self-contained and do not require a separate Python installation.
 
