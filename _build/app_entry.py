@@ -19,6 +19,35 @@ import os
 import io
 from pathlib import Path
 
+
+def _enable_dpi_awareness() -> None:
+    """Mark the process as DPI-aware on Windows before any GUI is created."""
+    if os.name != 'nt':
+        return
+
+    try:
+        import ctypes
+
+        user32 = ctypes.windll.user32
+        shcore = getattr(ctypes.windll, 'shcore', None)
+
+        # Per-monitor v2 gives the best scaling behavior on modern Windows.
+        if hasattr(user32, 'SetProcessDpiAwarenessContext'):
+            DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = ctypes.c_void_p(-4)
+            if user32.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2):
+                return
+
+        # Fallback for older Windows versions.
+        if shcore is not None and hasattr(shcore, 'SetProcessDpiAwareness'):
+            PROCESS_PER_MONITOR_DPI_AWARE = 2
+            if shcore.SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE) == 0:
+                return
+
+        if hasattr(user32, 'SetProcessDPIAware'):
+            user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
 # Force UTF-8 stdout/stderr so emoji/unicode in print() never crash the EXE
 try:
     if sys.stdout is not None and hasattr(sys.stdout, 'buffer'):
@@ -27,6 +56,8 @@ try:
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 except Exception:
     pass
+
+_enable_dpi_awareness()
 
 # ── Add project root to sys.path (needed when running from _build/) ───────────
 _this_dir = Path(__file__).resolve().parent   # _build/

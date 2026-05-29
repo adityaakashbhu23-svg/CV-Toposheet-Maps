@@ -131,6 +131,7 @@ exe = EXE(
     upx=True,
     console=False,
     icon=os.path.join(SPECPATH, 'app_icon.ico'),
+    manifest=os.path.join(SPECPATH, 'app.manifest'),
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
