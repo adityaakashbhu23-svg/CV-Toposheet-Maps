@@ -36,6 +36,7 @@ Store and build assets are included in the repository for packaging under [_buil
 - Searchable local database for extracted map features.
 - Excel and table export support.
 - Guided onboarding for API keys and Google Cloud setup.
+- PIN protection for the settings panel to prevent unauthorized viewing or editing of your private API keys.
 - In-app AI content reporting flow for user feedback and moderation review.
 
 ## Downloads
