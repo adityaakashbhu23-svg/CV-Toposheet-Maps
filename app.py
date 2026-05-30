@@ -272,6 +272,12 @@ def save_env():
     if not (ref.startswith('http://127.0.0.1:') or ref.startswith('http://localhost:')):
         return '', 403
     payload = request.get_json(force=True, silent=True) or {}
+    # Normalize legacy/blank OpenRouter model to the new default.
+    if 'OPENROUTER_MODEL' in payload:
+      old_openrouter_default = 'meta-llama/llama-3.3-70b-instruct:free'
+      or_model = str(payload.get('OPENROUTER_MODEL') or '').strip()
+      if (not or_model) or (or_model.lower() == old_openrouter_default):
+        payload['OPENROUTER_MODEL'] = 'openrouter/auto'
     for k, v in payload.items():
         if v:
             os.environ[k] = v
@@ -648,7 +654,8 @@ def get_env():
 
     # Migrate legacy OpenRouter default model to the new recommended auto router.
     old_openrouter_default = 'meta-llama/llama-3.3-70b-instruct:free'
-    if env_data.get('OPENROUTER_MODEL', '').strip() in ('', old_openrouter_default):
+    or_model = env_data.get('OPENROUTER_MODEL', '').strip().lower()
+    if (not or_model) or (or_model == old_openrouter_default):
       env_data['OPENROUTER_MODEL'] = 'openrouter/auto'
       os.environ['OPENROUTER_MODEL'] = 'openrouter/auto'
       try:
@@ -1518,7 +1525,17 @@ function _savePin(p) { localStorage.setItem(PIN_KEY, p); }
 function _clearPin() { localStorage.removeItem(PIN_KEY); }
 
 function _loadSettingsData() {
-  fetch('/get_env').then(r => r.json()).then(data => {
+  const orInput = document.getElementById('inp_OPENROUTER_MODEL');
+  const legacyOpenRouterModel = 'meta-llama/llama-3.3-70b-instruct:free';
+  if (orInput) {
+    const current = (orInput.value || '').trim();
+    if (!current || current === legacyOpenRouterModel) orInput.value = 'openrouter/auto';
+  }
+
+  fetch('/get_env').then(r => {
+    if (!r.ok) throw new Error('get_env failed');
+    return r.json();
+  }).then(data => {
     const legacyOpenRouterModel = 'meta-llama/llama-3.3-70b-instruct:free';
     const currentOpenRouterModel = (data.OPENROUTER_MODEL || '').trim();
     if (!currentOpenRouterModel || currentOpenRouterModel === legacyOpenRouterModel) {
