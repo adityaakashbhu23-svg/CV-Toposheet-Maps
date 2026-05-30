@@ -644,7 +644,19 @@ def get_env():
             'CLAUDE_API_KEY', 'GROK_API_KEY', 'GOOGLE_API_KEY', 'OPENROUTER_API_KEY',
             'OPENROUTER_MODEL', 'GOOGLE_APPLICATION_CREDENTIALS',
             'VERTEX_PROJECT', 'VERTEX_LOCATION', 'VERTEX_MODEL']
-    return json.dumps({k: os.environ.get(k, '') for k in keys})
+    env_data = {k: os.environ.get(k, '') for k in keys}
+
+    # Migrate legacy OpenRouter default model to the new recommended auto router.
+    old_openrouter_default = 'meta-llama/llama-3.3-70b-instruct:free'
+    if env_data.get('OPENROUTER_MODEL', '').strip() in ('', old_openrouter_default):
+      env_data['OPENROUTER_MODEL'] = 'openrouter/auto'
+      os.environ['OPENROUTER_MODEL'] = 'openrouter/auto'
+      try:
+        _write_env({'OPENROUTER_MODEL': 'openrouter/auto'})
+      except Exception:
+        pass
+
+    return json.dumps(env_data)
 
 
 @app.route('/results', methods=['GET', 'HEAD'])
