@@ -14,7 +14,7 @@
 #define AppURL         "https://github.com/adityaakashbhu23-svg/CV-Toposheet-Maps"
 #define AppExeName     "CVToposheet.exe"
 #define AppCopyright   "Copyright (C) 2026 Aditya Akash. Licensed under GNU GPLv3."
-#define DistDir        "dist\CVToposheet"
+#define DistDir        "..\dist\CVToposheet"
 #define IconFile       "app_icon.ico"
 
 [Setup]

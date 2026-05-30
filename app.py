@@ -1096,6 +1096,8 @@ body { min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; b
 .key-row label { font-size:0.82em; color:#334; min-width:160px; }
 .key-row-input { display:flex; align-items:center; gap:6px; flex:1; }
 .key-row-input input { flex:1; border:1px solid #cdd; border-radius:5px; padding:5px 8px; font-size:0.82em; }
+#key_section_models .key-row-input input { color:#6b7280; }
+#key_section_models .key-row-input input::placeholder { color:#9ca3af; }
 .eye-btn { background:none; border:none; cursor:pointer; font-size:1.1em; padding:0 2px; }
 .modal-overlay { display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,.35); align-items:center; justify-content:center; z-index:1000; }
 .modal-overlay.open { display:flex; }
