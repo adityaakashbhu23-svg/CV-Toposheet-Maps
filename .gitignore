@@ -23,8 +23,10 @@ _build/*.exe
 _build/dist/
 _build/work/
 _build/msix_staging/
+_build/msix_validate_unpack/
 _build/build_log.txt
 _build/build_err.txt
+_build/release_notes_v1.0.1.md
 Final App/
 
 # Output files (can be regenerated)
