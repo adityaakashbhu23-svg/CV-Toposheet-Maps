@@ -4,7 +4,7 @@ import os
 
 build_dir = r"C:\CV- Toposheet\_build"
 staging = os.path.join(build_dir, "msix_staging")
-output = os.path.join(build_dir, "CVToposheet_1.0.0.0_x64.msix")
+output = os.path.join(build_dir, "CVToposheet_1.0.1.0_x64.msix")
 makeappx = r"C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\makeappx.exe"
 
 # Remove old files

@@ -3,11 +3,9 @@
   AppxManifest.xml - MSIX Package Manifest for CV-Toposheet
   ─────────────────────────────────────────────────────────────
   BEFORE SUBMITTING TO MICROSOFT STORE:
-    1. Change Publisher to your exact Partner Center publisher CN.
-       Partner Center → Account settings → Organization profile → Publisher
-       Example:  CN=Aditya Akash, O=Aditya Akash, C=IN
-    2. Change Name to the Package/Identity/Name shown in Partner Center.
-    3. Version is always 4-part: MAJOR.MINOR.PATCH.0
+    1. Publisher already matches the Partner Center publisher CN.
+    2. Keep Name aligned with the Package/Identity/Name shown in Partner Center.
+    3. Version is always 4-part: MAJOR.MINOR.PATCH.0, and must be bumped for updates.
   ─────────────────────────────────────────────────────────────
 -->
 <Package
@@ -19,7 +17,7 @@
   <Identity
     Name="AdityaAkash.CVToposheet"
     Publisher="CN=7B768A78-BA7A-475F-9260-2205DAE591E5"
-    Version="1.0.0.0"
+    Version="1.0.1.0"
     ProcessorArchitecture="x64" />
 
   <Properties>

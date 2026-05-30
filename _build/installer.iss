@@ -8,7 +8,7 @@
 ; OUTPUT:  _build\CVToposheet_Setup.exe
 
 #define AppName        "CV-Toposheet"
-#define AppVersion     "1.0.0"
+#define AppVersion     "1.0.1"
 #define AppPublisher   "Aditya Akash"
 #define AppDescription "AI-Powered Historical Toposheet Digitization System"
 #define AppURL         "https://github.com/adityaakashbhu23-svg/CV-Toposheet-Maps"

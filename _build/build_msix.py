@@ -1,7 +1,7 @@
 """
 _build/build_msix.py
 ─────────────────────
-Builds CVToposheet_1.0.0.0_x64.msix from the PyInstaller dist folder.
+Builds CVToposheet_1.0.1.0_x64.msix from the PyInstaller dist folder.
 No Windows SDK, no MSIX Packaging Tool, no admin rights required.
 
 How it works:
@@ -22,7 +22,7 @@ Prerequisites:
     - _build\\app_icon.png must exist (already present)
 
 Output:
-    _build\\CVToposheet_1.0.0.0_x64.msix  (~250 MB compressed)
+    _build\\CVToposheet_1.0.1.0_x64.msix  (~250 MB compressed)
 
 Store submission:
     1. Update Publisher in AppxManifest.xml to your Partner Center CN.
@@ -38,7 +38,7 @@ SCRIPT_DIR = Path(__file__).parent
 DIST_DIR   = SCRIPT_DIR / 'dist' / 'CVToposheet'
 ASSETS_DIR = SCRIPT_DIR / 'Assets'
 MANIFEST   = SCRIPT_DIR / 'AppxManifest.xml'
-OUT_MSIX   = SCRIPT_DIR / 'CVToposheet_1.0.0.0_x64.msix'
+OUT_MSIX   = SCRIPT_DIR / 'CVToposheet_1.0.1.0_x64.msix'
 
 BLOCK_SIZE = 65536   # 64 KB per block — required by the MSIX spec
 
