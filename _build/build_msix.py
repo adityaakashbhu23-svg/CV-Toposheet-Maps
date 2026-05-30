@@ -252,4 +252,9 @@ def main():
 
 
 if __name__ == '__main__':
+    if '--allow-legacy-builder' not in sys.argv:
+        print('ERROR: _build/build_msix.py is a legacy experimental packer and can produce Store-rejected packages.')
+        print('Use _build/rebuild_msix.py (MakeAppx) for Microsoft Partner Center uploads.')
+        print('If you still want to run this script intentionally, pass: --allow-legacy-builder')
+        sys.exit(1)
     main()
