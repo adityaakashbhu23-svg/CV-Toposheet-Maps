@@ -1519,6 +1519,17 @@ function _clearPin() { localStorage.removeItem(PIN_KEY); }
 
 function _loadSettingsData() {
   fetch('/get_env').then(r => r.json()).then(data => {
+    const legacyOpenRouterModel = 'meta-llama/llama-3.3-70b-instruct:free';
+    const currentOpenRouterModel = (data.OPENROUTER_MODEL || '').trim();
+    if (!currentOpenRouterModel || currentOpenRouterModel === legacyOpenRouterModel) {
+      data.OPENROUTER_MODEL = 'openrouter/auto';
+      // Persist migration so next app start stays on the new default.
+      fetch('/save_env', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ OPENROUTER_MODEL: 'openrouter/auto' })
+      }).catch(() => {});
+    }
     for (const [k, v] of Object.entries(data)) {
       const inp = document.getElementById('inp_' + k);
       if (inp) inp.value = v || '';
@@ -1754,6 +1765,7 @@ function saveSettings() {
     const key = inp.id.replace('inp_', '');
     payload[key] = inp.value.trim();
   });
+  if (!payload.OPENROUTER_MODEL) payload.OPENROUTER_MODEL = 'openrouter/auto';
   fetch('/save_env', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
