@@ -61,6 +61,7 @@ datas = (
         (R('utils', 'cpu_utils.py'),      'utils'),
         (R('utils', 'db_utils.py'),       'utils'),
         (R('utils', 'image_utils.py'),    'utils'),
+        (R('utils', 'easyocr_worker.py'), 'utils'),
         (R('utils', 'llm_utils.py'),      'utils'),
         (R('utils', 'metadata_utils.py'), 'utils'),
         (R('utils', 'ocr_utils.py'),      'utils'),
@@ -86,6 +87,7 @@ hiddenimports = (
     + [
         'utils', 'utils.coords_utils', 'utils.cpu_utils', 'utils.db_utils',
         'utils.image_utils', 'utils.llm_utils', 'utils.metadata_utils', 'utils.ocr_utils',
+        'utils.easyocr_worker',
         'cv2',
         'PIL', 'PIL.Image', 'PIL.ImageOps', 'PIL.ImageDraw',
         'numpy',
@@ -111,8 +113,8 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', '_tkinter', 'matplotlib', 'scipy', 'IPython', 'jupyter',
-              'notebook', 'pytest', 'unittest'],
+    excludes=['tkinter', '_tkinter', 'matplotlib', 'IPython', 'jupyter',
+              'notebook', 'pytest'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -146,3 +148,14 @@ coll = COLLECT(
     upx_exclude=[],
     name='CVToposheet',
 )
+
+# ── Remove conflicting GNU OpenMP DLL after bundle is assembled ───────────────
+# libgomp-1.dll (GNU OpenMP, from OpenCV) conflicts with libiomp5md.dll
+# (Intel OpenMP, from PyTorch/EasyOCR) when both load in the same process.
+# Removing libgomp lets Intel OpenMP handle all OpenMP calls — no conflict,
+# no 3221226505 crash in offline/EasyOCR mode. All GCV models unaffected.
+import glob as _glob
+_bundle = os.path.join('dist', 'CVToposheet', '_internal')
+for _f in _glob.glob(os.path.join(_bundle, 'libgomp*.dll')):
+    os.remove(_f)
+    print(f'[build] Removed conflicting DLL: {_f}')

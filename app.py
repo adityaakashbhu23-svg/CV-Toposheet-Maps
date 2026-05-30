@@ -90,7 +90,8 @@ _MODEL_ENVS = {
     'claude':   {'LLM_PROVIDER': 'claude',  'OCR_ENGINE': 'gcv'},
     'grok':     {'LLM_PROVIDER': 'grok',    'OCR_ENGINE': 'gcv'},
     'gemini':   {'LLM_PROVIDER': 'gemini',  'OCR_ENGINE': 'gcv'},
-    'offline':  {'LLM_PROVIDER': 'groq',    'OCR_ENGINE': 'easyocr', 'OCR_WORKERS': '1'},
+    'openrouter': {'LLM_PROVIDER': 'openrouter', 'OCR_ENGINE': 'gcv'},
+    'offline':    {'LLM_PROVIDER': 'groq',       'OCR_ENGINE': 'easyocr', 'OCR_WORKERS': '1'},
 }
 
 app = Flask(__name__)
@@ -252,10 +253,23 @@ def upload_service_account():
     return json.dumps({'ok': True, 'saved': safe_name})
 
 
+def _session_feature_count(session_id: str) -> int:
+    """Return feature row count for a session DB (0 if missing/error)."""
+    db = _USER_DATA_DIR / 'results' / session_id / 'toposheet.db'
+    if not db.exists():
+        return 0
+    try:
+        with sqlite3.connect(str(db)) as con:
+            row = con.execute('SELECT COUNT(*) FROM features').fetchone()
+            return int(row[0] or 0)
+    except Exception:
+        return 0
+
+
 @app.route('/save_env', methods=['POST'])
 def save_env():
     ref = request.referrer or ''
-    if not ref.startswith('http://127.0.0.1:'):
+    if not (ref.startswith('http://127.0.0.1:') or ref.startswith('http://localhost:')):
         return '', 403
     payload = request.get_json(force=True, silent=True) or {}
     for k, v in payload.items():
@@ -445,22 +459,24 @@ def _stream_gen(filename, model, session_id):
 
     # ── API key check ────────────────────────────────────────────────────────
     _KEY_NEEDED = {
-        'vertex':  None,                   # uses service-account JSON, no API key
-        'gemini':  'GEMINI_API_KEY',
-        'groq':    'GROQ_API_KEY',
-        'openai':  'OPENAI_API_KEY',
-        'claude':  'CLAUDE_API_KEY',
-        'grok':    'GROK_API_KEY',
+        'vertex':      None,                   # uses service-account JSON, no API key
+        'gemini':      'GEMINI_API_KEY',
+        'groq':        'GROQ_API_KEY',
+        'openai':      'OPENAI_API_KEY',
+        'claude':      'CLAUDE_API_KEY',
+        'grok':        'GROK_API_KEY',
+        'openrouter':  'OPENROUTER_API_KEY',
     }
     provider = env_overrides.get('LLM_PROVIDER', 'vertex')
     required_key = _KEY_NEEDED.get(provider)
     if required_key and not os.environ.get(required_key, '').strip():
         friendly = {
-            'GEMINI_API_KEY': 'Gemini API Key',
-            'GROQ_API_KEY':   'Groq API Key',
-            'OPENAI_API_KEY': 'OpenAI API Key',
-            'CLAUDE_API_KEY': 'Claude API Key',
-            'GROK_API_KEY':   'Grok (xAI) API Key',
+            'GEMINI_API_KEY':     'Gemini API Key',
+            'GROQ_API_KEY':       'Groq API Key',
+            'OPENAI_API_KEY':     'OpenAI API Key',
+            'CLAUDE_API_KEY':     'Claude API Key',
+            'GROK_API_KEY':       'Grok (xAI) API Key',
+            'OPENROUTER_API_KEY': 'OpenRouter API Key',
         }.get(required_key, required_key)
         msg = (f'❌ No {friendly} found. '
                f'Please go to ⚙️ Settings, enter your {friendly}, and save before processing.')
@@ -503,11 +519,27 @@ def _stream_gen(filename, model, session_id):
         # Local OCR (EasyOCR/Tesseract) can trigger native DLL crashes when
         # BLAS/OpenMP thread pools over-subscribe in frozen builds.
         if env_overrides.get('OCR_ENGINE', '').lower() != 'gcv':
-          env.setdefault('OMP_NUM_THREADS', '1')
-          env.setdefault('OPENBLAS_NUM_THREADS', '1')
-          env.setdefault('MKL_NUM_THREADS', '1')
-          env.setdefault('NUMEXPR_NUM_THREADS', '1')
-          env.setdefault('KMP_DUPLICATE_LIB_OK', 'TRUE')
+          # Force safe single-thread native runtime settings for local OCR.
+          # setdefault is not enough because user/system env may already set
+          # aggressive OpenMP/BLAS values that crash frozen EasyOCR/Torch.
+          env['OMP_NUM_THREADS'] = '1'
+          env['OPENBLAS_NUM_THREADS'] = '1'
+          env['MKL_NUM_THREADS'] = '1'
+          env['NUMEXPR_NUM_THREADS'] = '1'
+          env['TORCH_NUM_THREADS'] = '1'
+          env['TORCH_NUM_INTEROP_THREADS'] = '1'
+          env['OMP_WAIT_POLICY'] = 'PASSIVE'
+          env['KMP_AFFINITY'] = 'disabled'
+          env['KMP_BLOCKTIME'] = '0'
+          env['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+          env['OPENCV_OPENCL_RUNTIME'] = 'disabled'
+          env['OPENBLAS_CORETYPE'] = 'GENERIC'
+          env['MKL_THREADING_LAYER'] = 'SEQUENTIAL'
+          env['MKL_ENABLE_INSTRUCTIONS'] = 'COMPATIBLE'
+          env['OMP_DYNAMIC'] = 'FALSE'
+          env['PYTORCH_JIT'] = '0'
+          env['GOMP_SPINCOUNT'] = '0'
+          env['GOMP_STACKSIZE'] = '65536'
 
         session_maps_dir    = str(_USER_DATA_DIR / 'maps'    / session_id)
         session_results_dir = str(_USER_DATA_DIR / 'results' / session_id)
@@ -575,7 +607,17 @@ def _stream_gen(filename, model, session_id):
         yield 'data: {"msg": "Saving to Map Database..."}\n\n'
         _merge_session_to_global(session_id)
 
-        yield f'data: {json.dumps({"done": True, "redirect": results_url, "msg": "Done! Click View Results."})}\n\n'
+        session_rows = _session_feature_count(session_id)
+        if session_rows == 0:
+          warn_msg = (
+            'Processing completed, but 0 features were extracted. '
+            'View Results may look empty. Try a clearer map, higher contrast scan, '
+            'or run with GCV OCR for stronger detection.'
+          )
+          yield f'data: {json.dumps({"done": True, "redirect": results_url, "empty": True, "msg": warn_msg})}\n\n'
+        else:
+          ok_msg = f'Done! Extracted {session_rows} feature(s). Click View Results.'
+          yield f'data: {json.dumps({"done": True, "redirect": results_url, "msg": ok_msg})}\n\n'
 
     finally:
         try:
@@ -596,11 +638,12 @@ def get_env():
     # Only allow requests originating from the app's own pages (pywebview or localhost).
     # Direct browser navigation (typing the URL) sends no Referer — block it.
     ref = request.referrer or ''
-    if not ref.startswith('http://127.0.0.1:'):
+    if not (ref.startswith('http://127.0.0.1:') or ref.startswith('http://localhost:')):
         return '', 403
     keys = ['GROQ_API_KEY', 'GEMINI_API_KEY', 'GEMINI_API_KEY_2', 'OPENAI_API_KEY',
-            'CLAUDE_API_KEY', 'GROK_API_KEY', 'GOOGLE_API_KEY',
-            'GOOGLE_APPLICATION_CREDENTIALS', 'VERTEX_PROJECT', 'VERTEX_LOCATION', 'VERTEX_MODEL']
+            'CLAUDE_API_KEY', 'GROK_API_KEY', 'GOOGLE_API_KEY', 'OPENROUTER_API_KEY',
+            'OPENROUTER_MODEL', 'GOOGLE_APPLICATION_CREDENTIALS',
+            'VERTEX_PROJECT', 'VERTEX_LOCATION', 'VERTEX_MODEL']
     return json.dumps({k: os.environ.get(k, '') for k in keys})
 
 
@@ -1099,8 +1142,8 @@ body { min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; b
 .pin-shake { animation:pinShake .4s ease; }
 .modal-lock-btn { background:none; border:none; font-size:1.2em; cursor:pointer; padding:0 6px; line-height:1; opacity:.7; }
 .modal-lock-btn:hover { opacity:1; }
-.modal-info-btn { background:none; border:none; font-size:1.15em; cursor:pointer; padding:0 5px; line-height:1; color:#0E7490; opacity:.75; font-weight:900; }
-.modal-info-btn:hover { opacity:1; }
+.modal-info-btn { background:#0E7490; border:none; font-size:0.72em; cursor:pointer; padding:0 8px 0 6px; line-height:1; color:#fff; font-weight:700; height:22px; border-radius:20px; display:inline-flex; align-items:center; gap:4px; opacity:.85; }
+.modal-info-btn:hover { opacity:1; background:#0891b2; }
 .help-overlay { display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,.55); align-items:center; justify-content:center; z-index:1200; }
 .help-overlay.open { display:flex; }
 .help-box { background:#fff; border-radius:14px; box-shadow:0 8px 40px rgba(14,116,144,.3); width:90vw; max-width:620px; max-height:85vh; display:flex; flex-direction:column; overflow:hidden; }
@@ -1305,10 +1348,17 @@ body { min-height:100vh; font-family:'Segoe UI', system-ui, Arial, sans-serif; b
           <div class="mc-desc">GCV OCR + Gemini 1.5 Flash</div>
         </div>
       </label>
+      <label class="model-card" onclick="selectCard(this)" data-model="openrouter">
+        <input type="radio" name="model_sel" value="openrouter">
+        <div class="mc-body">
+          <div class="mc-name">8. OpenRouter <span class="badge badge-optional">OPTIONAL</span></div>
+          <div class="mc-desc">GCV OCR + OpenRouter (any model)</div>
+        </div>
+      </label>
       <label class="model-card" onclick="selectCard(this)" data-model="offline">
         <input type="radio" name="model_sel" value="offline">
         <div class="mc-body">
-          <div class="mc-name">8. Offline <span class="badge badge-offline">NO CLOUD</span></div>
+          <div class="mc-name">9. Offline <span class="badge badge-offline">NO CLOUD</span></div>
           <div class="mc-desc">EasyOCR (local) + Groq LLaMA 3.3 70B</div>
         </div>
       </label>
@@ -1333,8 +1383,9 @@ const MODEL_INFO = {
   openai:   '<b>OpenAI GPT-4o:</b> Parallel GCV OCR + GPT-4o-mini. 80 items/batch. Reliable paid OpenAI API.',
   claude:   '<b>Claude Haiku:</b> Parallel GCV OCR + Claude 3.5 Haiku. Strong reasoning. Anthropic API key required.',
   grok:     '<b>Grok (xAI):</b> Parallel GCV OCR + Grok-3-mini. Fast xAI inference. xAI API key required.',
-  gemini:   '<b>Gemini API:</b> Google Cloud Vision OCR + Gemini (API key). Uses GEMINI_API_KEY from .env no Vertex AI or GCP billing needed.',
-  offline:  '<b>Offline OCR:</b> EasyOCR runs locally on your machine. No Google Cloud Vision or GCP service account needed. Internet required for LLM cleaning. Use this mode when you have no GCP credentials.',
+  gemini:      '<b>Gemini API:</b> Google Cloud Vision OCR + Gemini (API key). Uses GEMINI_API_KEY from .env no Vertex AI or GCP billing needed.',
+  openrouter:  '<b>OpenRouter:</b> Parallel GCV OCR + any model via OpenRouter. Access 100s of models (free and paid) with one API key. OpenRouter API key required.',
+  offline:     '<b>Offline OCR:</b> EasyOCR runs locally on your machine. No Google Cloud Vision or GCP service account needed. Internet required for LLM cleaning. Use this mode when you have no GCP credentials.',
 };
 
 function killRunningJob() {
@@ -1509,7 +1560,7 @@ function openReportModal(evt) {
     const selectedCode = model ? model.value : '';
     const modelSelect = document.getElementById('report_model');
     const modelOther = document.getElementById('report_model_other');
-    const known = ['best','fast','ensemble','openai','claude','grok','gemini','offline'];
+    const known = ['best','fast','ensemble','openai','claude','grok','gemini','openrouter','offline'];
     window._lastReportPayload = null;
     if (modelSelect) {
       if (known.includes(selectedCode)) {
@@ -1873,7 +1924,7 @@ function _updateLockBtn() {
   if (!btn) return;
   const has = !!_getPin();
   btn.textContent = has ? '🔒' : '🔓';
-  btn.title = has ? 'PIN lock ON — click to change/remove' : 'No PIN — click to set lock';
+  btn.title = has ? 'PIN lock ON · click to change/remove' : 'No PIN · click to set lock';
 }
 function _showSettingsToast(msg) {
   const n = document.getElementById('saveNotice');
@@ -1952,6 +2003,7 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
               <option value="claude">Claude Haiku</option>
               <option value="grok">Grok (xAI)</option>
               <option value="gemini">Gemini API</option>
+              <option value="openrouter">OpenRouter</option>
               <option value="offline">Offline (EasyOCR + Groq)</option>
               <option value="other">Other (type manually)</option>
             </select>
@@ -1991,7 +2043,7 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
     <div class="modal-header">
       <h2>&#9881; API Key Settings</h2>
       <div style="display:flex;align-items:center;gap:4px;">
-        <button class="modal-info-btn" onclick="event.stopPropagation(); openHelp()" title="Help &amp; Setup Guide">&#8505;</button>
+        <button class="modal-info-btn" onclick="event.stopPropagation(); openHelp()" title="Help &amp; Setup Guide">&#8505; Info</button>
         <button class="modal-lock-btn" id="pinLockBtn" onclick="event.stopPropagation(); openPinSetup()" title="Set PIN lock">🔓</button>
         <button class="modal-close" onclick="closeSettings()">&#x2715;</button>
       </div>
@@ -2043,6 +2095,13 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
             <button class="eye-btn" onclick="toggleEye('GROK_API_KEY')">&#128065;</button>
           </div>
         </div>
+        <div class="key-row">
+          <label>OpenRouter API Key</label>
+          <div class="key-row-input">
+            <input type="password" id="inp_OPENROUTER_API_KEY" placeholder="sk-or-...">
+            <button class="eye-btn" onclick="toggleEye('OPENROUTER_API_KEY')">&#128065;</button>
+          </div>
+        </div>
       </div>
 
       <div class="key-section collapsed" id="key_section_models">
@@ -2081,6 +2140,12 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
           <label>Vertex AI Model</label>
           <div class="key-row-input">
             <input type="text" id="inp_VERTEX_MODEL" placeholder="gemini-2.5-flash">
+          </div>
+        </div>
+        <div class="key-row">
+          <label>OpenRouter Model</label>
+          <div class="key-row-input">
+            <input type="text" id="inp_OPENROUTER_MODEL" placeholder="meta-llama/llama-3.3-70b-instruct:free">
           </div>
         </div>
       </div>
@@ -2211,6 +2276,17 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
         <div class="help-card-desc">Click <b>&#9881; Settings &rarr; Google Cloud &rarr; Upload GCP Service Account JSON</b> and select the downloaded file.</div>
       </div>
       <div class="help-note" style="margin-top:8px;background:#f0fdf4;border-color:#86efac;color:#166534;">&#11088; For even better results, also enable <b>Vertex AI API</b> in Google Cloud Console (APIs &amp; Services &rarr; Library &rarr; search &ldquo;Vertex AI&rdquo; &rarr; Enable).</div>
+
+      <div class="help-sep"></div>
+
+      <!-- Model Versions -->
+      <div class="help-sec-title">&#9881;&#65039; Model Versions (optional)</div>
+      <p style="font-size:0.83em;color:#4a6070;line-height:1.5;margin-bottom:10px;">Default model versions work for most users. Only change if you want a specific version.</p>
+      <div class="help-card">
+        <div class="help-card-title">Default models</div>
+        <div class="help-card-desc">Groq: <b>llama-3.1-8b-instant</b> &nbsp;|&nbsp; Gemini: <b>gemini-2.5-flash</b><br>OpenAI: <b>gpt-4o-mini</b> &nbsp;|&nbsp; Claude: <b>claude-haiku-4-5</b><br>Grok: <b>grok-3-mini</b> &nbsp;|&nbsp; OpenRouter: <b>openrouter/auto</b></div>
+      </div>
+      <div class="help-note">&#128161; To use a different model, open <b>&#9881; Settings &rarr; Model Versions</b>, type the model name and save.</div>
 
       <div class="help-sep"></div>
 

@@ -722,6 +722,74 @@ def clean_with_grok(
 
 
 # ─────────────────────────────────────────────────────────────
+#  OpenRouter  (OpenAI-compatible, many models)
+# ─────────────────────────────────────────────────────────────
+
+def clean_with_openrouter(
+    raw_texts: List[str],
+    api_key: str,
+    model: str = 'meta-llama/llama-3.3-70b-instruct:free',
+    batch_size: int = 80
+) -> List[Dict]:
+    """
+    Send raw OCR texts to OpenRouter for cleaning and classification.
+    Uses OpenAI-compatible endpoint at openrouter.ai.
+    Supports any model available on OpenRouter (free and paid).
+    """
+    try:
+        from openai import OpenAI
+    except ImportError:
+        print('[LLM] openai package not installed. Run: pip install openai')
+        return []
+
+    client = OpenAI(
+        api_key=api_key,
+        base_url='https://openrouter.ai/api/v1',
+        max_retries=0,
+        default_headers={
+            'HTTP-Referer': 'https://github.com/adityaakashbhu23-svg/CV-Toposheet-Maps',
+            'X-Title': 'CV-Toposheet',
+        },
+    )
+    all_results = []
+    total_batches = (len(raw_texts) + batch_size - 1) // batch_size
+
+    for start in range(0, len(raw_texts), batch_size):
+        batch = raw_texts[start:start + batch_size]
+        batch_num = start // batch_size + 1
+        for attempt in range(3):
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {'role': 'system', 'content': SYSTEM_PROMPT},
+                        {'role': 'user',   'content': _build_user_message(batch)},
+                    ],
+                    temperature=0.1,
+                    max_tokens=8192,
+                )
+                content = response.choices[0].message.content
+                parsed = _parse_llm_json(content)
+                all_results.extend(parsed)
+                print(f'[LLM/OpenRouter] Batch {batch_num}/{total_batches}: {len(parsed)} features')
+                break
+            except Exception as e:
+                err_str = str(e)
+                if '401' in err_str or 'invalid' in err_str.lower():
+                    print(f'[LLM/OpenRouter] Invalid API key: {e}')
+                    return all_results
+                if '429' in err_str or 'quota' in err_str.lower() or 'rate' in err_str.lower():
+                    wait = 20 * (attempt + 1)
+                    print(f'[LLM/OpenRouter] Rate-limited batch {batch_num} (attempt {attempt+1}/3), waiting {wait}s...')
+                    time.sleep(wait)
+                else:
+                    print(f'[LLM/OpenRouter] Error: {e}')
+                    break
+
+    return all_results
+
+
+# ─────────────────────────────────────────────────────────────
 #  Google Gemini
 # ─────────────────────────────────────────────────────────────
 
@@ -1254,24 +1322,33 @@ def clean_with_llm(raw_texts: List[str]) -> List[Dict]:
         r = clean_with_openai(texts, key, mdl)
         return r if r else None
 
+    def _try_openrouter(texts):
+        key = getattr(config, 'OPENROUTER_API_KEY', '')
+        mdl = getattr(config, 'OPENROUTER_MODEL', 'meta-llama/llama-3.3-70b-instruct:free')
+        if not key:
+            return None
+        r = clean_with_openrouter(texts, key, mdl)
+        return r if r else None
+
     def _try_local(texts):
         return clean_with_local(texts)
 
     # Build ordered list: configured provider first, then fallbacks, local always last
-    # Best speed+cost order: vertex → openai → grok → gemini → claude → groq → local
-    _all = [_try_vertex, _try_openai, _try_grok, _try_gemini, _try_claude, _try_groq, _try_local]
+    # Best speed+cost order: vertex → openai → grok → gemini → claude → groq → openrouter → local
+    _all = [_try_vertex, _try_openai, _try_grok, _try_gemini, _try_claude, _try_groq, _try_openrouter, _try_local]
     _named = {
-        'vertex': _try_vertex,
-        'claude': _try_claude,
-        'openai': _try_openai,
-        'grok':   _try_grok,
-        'gemini': _try_gemini,
-        'groq':   _try_groq,
-        'local':  _try_local,
+        'vertex':      _try_vertex,
+        'claude':      _try_claude,
+        'openai':      _try_openai,
+        'grok':        _try_grok,
+        'gemini':      _try_gemini,
+        'groq':        _try_groq,
+        'openrouter':  _try_openrouter,
+        'local':       _try_local,
     }
 
     if provider not in _named:
-        print(f'[LLM] Unknown provider "{provider}". Valid: grok, groq, claude, gemini, openai, local')
+        print(f'[LLM] Unknown provider "{provider}". Valid: grok, groq, claude, gemini, openai, openrouter, local')
         return clean_with_local(raw_texts)
 
     # Use ONLY the selected provider — no silent fallback to other LLMs.
@@ -1346,6 +1423,12 @@ def clean_with_ensemble(raw_texts: List[str], max_workers: int = 6) -> List[Dict
         _grq_k = config.GROQ_API_KEY
         _grq_m = getattr(config, 'GROQ_MODEL', 'llama-3.1-8b-instant')
         jobs.append(('groq', lambda t, k=_grq_k, m=_grq_m: clean_with_groq(t, k, m)))
+
+    # OpenRouter
+    if getattr(config, 'OPENROUTER_API_KEY', ''):
+        _or_k = config.OPENROUTER_API_KEY
+        _or_m = getattr(config, 'OPENROUTER_MODEL', 'meta-llama/llama-3.3-70b-instruct:free')
+        jobs.append(('openrouter', lambda t, k=_or_k, m=_or_m: clean_with_openrouter(t, k, m)))
 
     # Vertex AI (Google Cloud / service account)
     if getattr(config, 'VERTEX_PROJECT', ''):

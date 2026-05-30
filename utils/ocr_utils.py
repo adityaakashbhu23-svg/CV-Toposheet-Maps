@@ -3,6 +3,8 @@
 import os
 import json
 import tempfile
+import subprocess
+import sys
 import numpy as np
 import cv2
 from pathlib import Path
@@ -14,6 +16,7 @@ _easyocr_reader = None
 # Reduce native thread contention in frozen builds (OpenCV/Torch/OpenMP).
 try:
     cv2.setNumThreads(1)
+    cv2.ocl.setUseOpenCL(False)
 except Exception:
     pass
 
@@ -47,6 +50,87 @@ _gcv_using_backup = False
 # EasyOCR is not thread-safe – serialize all calls behind a lock
 import threading as _threading
 _easyocr_lock = _threading.Lock()
+
+
+def _should_isolate_easyocr() -> bool:
+    """Use a crash-shield subprocess for EasyOCR in fragile runtimes."""
+    mode = os.getenv('EASYOCR_ISOLATE', 'auto').strip().lower()
+    if mode in ('1', 'true', 'yes', 'on'):
+        return True
+    if mode in ('0', 'false', 'no', 'off'):
+        return False
+    # auto: enable on Windows frozen builds where native OCR crashes have
+    # been observed in-process (exit code 3221226505).
+    return bool(os.name == 'nt' and getattr(sys, 'frozen', False))
+
+
+def _ocr_tile_easyocr_isolated(tile: np.ndarray, confidence_threshold: float = 0.3) -> Optional[List[Dict]]:
+    """Run EasyOCR in a helper process so native crashes do not kill pipeline."""
+    worker = Path(__file__).with_name('easyocr_worker.py')
+    if not worker.exists():
+        print('[OCR] EasyOCR worker script not found; falling back to in-process OCR.')
+        return None
+
+    with tempfile.TemporaryDirectory(prefix='easyocr_iso_') as td:
+        td_path = Path(td)
+        in_png = td_path / 'tile.png'
+        out_json = td_path / 'out.json'
+        if not cv2.imwrite(str(in_png), tile):
+            print('[OCR] Failed to write temporary tile for isolated EasyOCR run.')
+            return []
+
+        child_env = os.environ.copy()
+        child_env['OMP_NUM_THREADS'] = '1'
+        child_env['OPENBLAS_NUM_THREADS'] = '1'
+        child_env['MKL_NUM_THREADS'] = '1'
+        child_env['NUMEXPR_NUM_THREADS'] = '1'
+        child_env['TORCH_NUM_THREADS'] = '1'
+        child_env['TORCH_NUM_INTEROP_THREADS'] = '1'
+        child_env['OMP_WAIT_POLICY'] = 'PASSIVE'
+        child_env['KMP_AFFINITY'] = 'disabled'
+        child_env['KMP_BLOCKTIME'] = '0'
+        child_env['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+        child_env['OPENCV_OPENCL_RUNTIME'] = 'disabled'
+        child_env['OPENBLAS_CORETYPE'] = 'GENERIC'
+        child_env['MKL_THREADING_LAYER'] = 'SEQUENTIAL'
+        child_env['MKL_ENABLE_INSTRUCTIONS'] = 'COMPATIBLE'
+        child_env['OMP_DYNAMIC'] = 'FALSE'
+        child_env['PYTORCH_JIT'] = '0'
+
+        cmd = [
+            sys.executable,
+            str(worker),
+            '--input', str(in_png),
+            '--output', str(out_json),
+            '--threshold', str(confidence_threshold),
+        ]
+
+        try:
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                timeout=180,
+                env=child_env,
+            )
+        except Exception as e:
+            print(f'[OCR] Isolated EasyOCR launch failed: {e}')
+            return []
+
+        if res.returncode != 0:
+            tail = (res.stderr or res.stdout or '').strip()
+            if tail:
+                tail = tail.splitlines()[-1]
+            print(f'[OCR] Isolated EasyOCR failed (code={res.returncode}). {tail}')
+            return []
+
+        try:
+            return json.loads(out_json.read_text(encoding='utf-8'))
+        except Exception as e:
+            print(f'[OCR] Isolated EasyOCR output parse error: {e}')
+            return []
 
 
 def _get_failover_lock():
@@ -261,6 +345,11 @@ def ocr_tile_easyocr(tile: np.ndarray, confidence_threshold: float = 0.3) -> Lis
     Run EasyOCR on a single tile.
     Returns a list of dicts: {text, confidence, bbox: [x1,y1,x2,y2]}
     """
+    if _should_isolate_easyocr():
+        isolated = _ocr_tile_easyocr_isolated(tile, confidence_threshold)
+        if isolated is not None:
+            return isolated
+
     reader = _get_easyocr()
     try:
         with _easyocr_lock:
