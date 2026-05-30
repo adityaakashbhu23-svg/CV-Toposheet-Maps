@@ -33,6 +33,12 @@ GROK_MODEL          = os.getenv('GROK_MODEL',          'grok-3-mini')
 OPENROUTER_API_KEY  = os.getenv('OPENROUTER_API_KEY',  '')
 OPENROUTER_MODEL    = os.getenv('OPENROUTER_MODEL',     'openrouter/auto')
 
+# Normalize legacy OpenRouter default to the new routing default.
+_legacy_openrouter_model = 'meta-llama/llama-3.3-70b-instruct:free'
+if not (OPENROUTER_MODEL or '').strip() or (OPENROUTER_MODEL or '').strip().lower() == _legacy_openrouter_model:
+    OPENROUTER_MODEL = 'openrouter/auto'
+    os.environ['OPENROUTER_MODEL'] = OPENROUTER_MODEL
+
 # Which LLM to use: "vertex", "groq", "openai", "gemini", "claude", or "local"
 LLM_PROVIDER    = os.getenv('LLM_PROVIDER', 'vertex').lower()
 
