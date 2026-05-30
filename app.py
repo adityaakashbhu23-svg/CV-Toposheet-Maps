@@ -2145,7 +2145,7 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
         <div class="key-row">
           <label>OpenRouter Model</label>
           <div class="key-row-input">
-            <input type="text" id="inp_OPENROUTER_MODEL" placeholder="meta-llama/llama-3.3-70b-instruct:free">
+            <input type="text" id="inp_OPENROUTER_MODEL" placeholder="openrouter/auto">
           </div>
         </div>
       </div>

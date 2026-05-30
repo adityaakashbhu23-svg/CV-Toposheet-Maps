@@ -728,7 +728,7 @@ def clean_with_grok(
 def clean_with_openrouter(
     raw_texts: List[str],
     api_key: str,
-    model: str = 'meta-llama/llama-3.3-70b-instruct:free',
+    model: str = 'openrouter/auto',
     batch_size: int = 80
 ) -> List[Dict]:
     """
@@ -1324,7 +1324,7 @@ def clean_with_llm(raw_texts: List[str]) -> List[Dict]:
 
     def _try_openrouter(texts):
         key = getattr(config, 'OPENROUTER_API_KEY', '')
-        mdl = getattr(config, 'OPENROUTER_MODEL', 'meta-llama/llama-3.3-70b-instruct:free')
+        mdl = getattr(config, 'OPENROUTER_MODEL', 'openrouter/auto')
         if not key:
             return None
         r = clean_with_openrouter(texts, key, mdl)
@@ -1427,7 +1427,7 @@ def clean_with_ensemble(raw_texts: List[str], max_workers: int = 6) -> List[Dict
     # OpenRouter
     if getattr(config, 'OPENROUTER_API_KEY', ''):
         _or_k = config.OPENROUTER_API_KEY
-        _or_m = getattr(config, 'OPENROUTER_MODEL', 'meta-llama/llama-3.3-70b-instruct:free')
+        _or_m = getattr(config, 'OPENROUTER_MODEL', 'openrouter/auto')
         jobs.append(('openrouter', lambda t, k=_or_k, m=_or_m: clean_with_openrouter(t, k, m)))
 
     # Vertex AI (Google Cloud / service account)
