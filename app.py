@@ -2296,6 +2296,20 @@ window.addEventListener('DOMContentLoaded', _updateLockBtn);</script>
 
       <div class="help-sep"></div>
 
+      <!-- PIN Lock -->
+      <div class="help-sec-title">&#128274; PIN Lock (optional)</div>
+      <p style="font-size:0.83em;color:#4a6070;line-height:1.5;margin-bottom:10px;">Protect your API keys with a 4-digit PIN so no one else can open Settings.</p>
+      <div class="help-card">
+        <div class="help-card-title">Set a PIN</div>
+        <div class="help-card-desc">Open <b>&#9881; Settings</b> &rarr; click the <b>&#128275; lock icon</b> (top right of Settings) &rarr; enter a 4-digit PIN &rarr; confirm.</div>
+      </div>
+      <div class="help-card" style="margin-top:8px;">
+        <div class="help-card-title">Remove a PIN</div>
+        <div class="help-card-desc">Open <b>&#9881; Settings</b> &rarr; enter your current PIN &rarr; click <b>Remove PIN</b>.</div>
+      </div>
+
+      <div class="help-sep"></div>
+
       <!-- How to process -->
       <div class="help-sec-title">&#128640; How to Process Your First Map</div>
       <div class="help-ready-row"><div class="hri">&#128444;&#65039;</div><div class="hrt"><b>Upload:</b> Drag &amp; drop a JPG / PNG / TIF toposheet onto the home screen (up to 500 MB)</div></div>
