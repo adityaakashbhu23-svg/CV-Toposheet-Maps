@@ -38,6 +38,12 @@ maps/*.jpeg
 maps/*.png
 maps/*.tif
 maps/*.tiff
+maps/**
+
+# Local testing artifacts under _build
+_build/App testing*.xml
+_build/App test*.pdf
+_build/App tsting*.xml
 
 # VS Code
 .vscode/
